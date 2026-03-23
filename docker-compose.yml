@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_ACCESS_KEY=${MODEL_ACCESS_KEY}
+      - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-https://inference.do-ai.run/v1}
+      - MODEL=${MODEL:-anthropic-claude-4.6-sonnet}
+      - SYNERGY_MODEL=${SYNERGY_MODEL:-anthropic-claude-3.5-haiku}
+    volumes:
+      # Persist ChromaDB index and downloaded models between restarts
+      - ./backend/data:/app/data
+      - ./backend/models:/app/models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
