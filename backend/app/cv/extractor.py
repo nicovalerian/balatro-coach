@@ -24,7 +24,7 @@ from typing import Any
 
 from PIL import Image
 
-from .detector import BalatroDetector, Detection
+from .detector import BalatroDetector
 from .ocr import read_number, read_text
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,6 @@ class StateExtractor:
 
         # ── Screen type heuristic ──────────────────────────────────────────────
         ui_labels = {d.label for d in ui_dets}
-        entity_labels = {d.label for d in entities}
 
         if "button_reroll" in ui_labels:
             state.screen_type = "shop"
