@@ -30,10 +30,6 @@ try:
 except ImportError:
     _BM25_AVAILABLE = False
 
-
-@dataclass_compat = False  # just use plain class
-
-
 class RAGRetriever:
     CARD_COLLECTION = "balatro_cards"
     GUIDE_COLLECTION = "balatro_guides"
