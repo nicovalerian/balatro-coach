@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     model_access_key: str
     inference_base_url: str = "https://inference.do-ai.run/v1"
     model: str = "anthropic-claude-4.6-sonnet"
+    model_fallbacks: str = "openai-gpt-5-mini,glm-5"
     synergy_model: str = "anthropic-claude-3.5-haiku"
 
     # CV

@@ -82,6 +82,7 @@ See `.env.example`. Main settings:
 - `MODEL_ACCESS_KEY` (required)
 - `INFERENCE_BASE_URL` (default: `https://inference.do-ai.run/v1`)
 - `MODEL` (default: `anthropic-claude-4.6-sonnet`)
+- `MODEL_FALLBACKS` (default: `openai-gpt-5-mini,glm-5`)
 - `SYNERGY_MODEL` (default: `anthropic-claude-3.5-haiku`)
 
 ---

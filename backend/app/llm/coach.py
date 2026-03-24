@@ -19,7 +19,7 @@ import json
 import logging
 from typing import AsyncIterator
 
-from openai import OpenAI
+from openai import AuthenticationError, OpenAI
 
 from ..config import settings
 from ..rag.retriever import RAGRetriever
@@ -64,6 +64,7 @@ class BalatroCoach:
         base_url = settings.inference_base_url.rstrip("/") + "/"
         self._client = OpenAI(api_key=settings.model_access_key, base_url=base_url)
         self._retriever = retriever
+        self._models = self._build_model_candidates()
 
     async def stream_response(
         self,
@@ -115,21 +116,49 @@ class BalatroCoach:
         user_content.append({"type": "text", "text": user_message})
 
         # ── Stream from serverless inference chat completions API ────────────
-        stream = self._client.chat.completions.create(
-            model=settings.model,
-            max_completion_tokens=settings.max_output_tokens,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_content},
-            ],
-            stream=True,
-        )
-        for chunk in stream:
-            if not chunk.choices:
-                continue
-            text = chunk.choices[0].delta.content
-            if text:
-                yield text
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ]
+
+        last_error: Exception | None = None
+        for index, model_name in enumerate(self._models):
+            is_last = index == len(self._models) - 1
+            try:
+                stream = self._client.chat.completions.create(
+                    model=model_name,
+                    max_completion_tokens=settings.max_output_tokens,
+                    messages=messages,
+                    stream=True,
+                )
+                if model_name != settings.model:
+                    logger.warning(
+                        "Primary model unavailable; using fallback model '%s'",
+                        model_name,
+                    )
+                for chunk in stream:
+                    if not chunk.choices:
+                        continue
+                    text = chunk.choices[0].delta.content
+                    if text:
+                        yield text
+                return
+            except AuthenticationError as exc:
+                last_error = exc
+                msg = str(exc).lower()
+                if "not available for your subscription tier" in msg and not is_last:
+                    logger.warning(
+                        "Model '%s' unavailable for current tier, trying next fallback",
+                        model_name,
+                    )
+                    continue
+                raise
+            except Exception as exc:
+                last_error = exc
+                raise
+
+        if last_error is not None:
+            raise last_error
 
     def _build_rag_query(self, user_message: str, game_state: dict | None) -> str:
         """Enrich retrieval query with joker names from game state."""
@@ -153,6 +182,18 @@ class BalatroCoach:
         if any(term in message_lower for term in mechanic_terms):
             parts.extend(["joker rarity", "activation timing", "left to right order", "synergy"])
         return " ".join(p for p in parts if p)
+
+    def _build_model_candidates(self) -> list[str]:
+        candidates: list[str] = [settings.model.strip()]
+        fallbacks = [
+            m.strip()
+            for m in settings.model_fallbacks.split(",")
+            if m.strip()
+        ]
+        for model_name in fallbacks:
+            if model_name not in candidates:
+                candidates.append(model_name)
+        return candidates
 
 
 def _format_context(chunks: list[dict]) -> str:
