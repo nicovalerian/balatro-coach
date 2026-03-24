@@ -22,6 +22,8 @@ from app.config import settings
 from app.rag.ingest import (
     iter_wiki_cards,
     generate_synergy_notes,
+    iter_mechanics_docs,
+    iter_strategy_guides,
     save_jsonl,
     load_jsonl,
 )
@@ -29,6 +31,8 @@ from app.rag.retriever import RAGRetriever
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 WIKI_CACHE = DATA_DIR / "wiki_cards.jsonl"
+MECHANICS_CACHE = DATA_DIR / "mechanics.jsonl"
+GUIDES_CACHE = DATA_DIR / "strategy_guides.jsonl"
 SYNERGY_CACHE = DATA_DIR / "synergies.jsonl"
 
 # Top jokers for synergy generation (expand as needed)
@@ -82,7 +86,29 @@ def main():
     print(f"  {len(wiki_docs)} wiki card docs")
     all_docs.extend(wiki_docs)
 
-    # ── 2. Synergy corpus ─────────────────────────────────────────────────────
+    # ── 2. Deterministic mechanics corpus ─────────────────────────────────────
+    if MECHANICS_CACHE.exists() and not args.force:
+        print(f"Loading mechanics cache ({MECHANICS_CACHE})…")
+        mechanics_docs = load_jsonl(MECHANICS_CACHE)
+    else:
+        print("Building mechanics corpus…")
+        mechanics_docs = list(iter_mechanics_docs())
+        save_jsonl(mechanics_docs, MECHANICS_CACHE)
+    print(f"  {len(mechanics_docs)} mechanics docs")
+    all_docs.extend(mechanics_docs)
+
+    # ── 3. Curated strategy guides ────────────────────────────────────────────
+    if GUIDES_CACHE.exists() and not args.force:
+        print(f"Loading strategy cache ({GUIDES_CACHE})…")
+        guide_docs = load_jsonl(GUIDES_CACHE)
+    else:
+        print("Building curated strategy corpus…")
+        guide_docs = list(iter_strategy_guides())
+        save_jsonl(guide_docs, GUIDES_CACHE)
+    print(f"  {len(guide_docs)} strategy guide docs")
+    all_docs.extend(guide_docs)
+
+    # ── 4. Synergy corpus ─────────────────────────────────────────────────────
     if args.synergies:
         if SYNERGY_CACHE.exists() and not args.force:
             print(f"Loading synergy cache ({SYNERGY_CACHE})…")
@@ -99,7 +125,7 @@ def main():
         print(f"  {len(synergy_docs)} synergy docs")
         all_docs.extend(synergy_docs)
 
-    # ── 3. Index everything ───────────────────────────────────────────────────
+    # ── 5. Index everything ───────────────────────────────────────────────────
     print(f"\nIndexing {len(all_docs)} total docs into ChromaDB…")
     retriever = RAGRetriever(
         persist_dir=settings.chroma_persist_dir,

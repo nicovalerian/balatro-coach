@@ -20,6 +20,7 @@ import logging
 from typing import AsyncIterator
 
 from openai import OpenAI
+from openai import AuthenticationError, APIError, RateLimitError
 
 from ..config import settings
 from ..rag.retriever import RAGRetriever
@@ -115,21 +116,25 @@ class BalatroCoach:
         user_content.append({"type": "text", "text": user_message})
 
         # ── Stream from serverless inference chat completions API ────────────
-        stream = self._client.chat.completions.create(
-            model=settings.model,
-            max_completion_tokens=settings.max_output_tokens,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_content},
-            ],
-            stream=True,
-        )
-        for chunk in stream:
-            if not chunk.choices:
-                continue
-            text = chunk.choices[0].delta.content
-            if text:
-                yield text
+        try:
+            stream = self._client.chat.completions.create(
+                model=settings.model,
+                max_completion_tokens=settings.max_output_tokens,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
+                stream=True,
+            )
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                text = chunk.choices[0].delta.content
+                if text:
+                    yield text
+        except (AuthenticationError, RateLimitError, APIError) as exc:
+            logger.warning("LLM unavailable, using retrieval-only fallback: %s", exc)
+            yield _build_retrieval_only_fallback(user_message, game_state, context_chunks, exc)
 
     def _build_rag_query(self, user_message: str, game_state: dict | None) -> str:
         """Enrich retrieval query with joker names from game state."""
@@ -139,6 +144,19 @@ class BalatroCoach:
             parts.extend(jokers)
             shop_items = [i.get("name", "") for i in game_state.get("shop", {}).get("items", [])]
             parts.extend(shop_items)
+            if game_state.get("ante") is not None:
+                parts.append(f"ante {game_state['ante']}")
+            blind = game_state.get("blind", {}) or {}
+            if blind.get("name"):
+                parts.append(str(blind["name"]))
+            resources = game_state.get("resources", {}) or {}
+            for key in ("hands", "discards", "money"):
+                if resources.get(key) is not None:
+                    parts.append(f"{key} {resources[key]}")
+        message_lower = user_message.lower()
+        mechanic_terms = ("rarity", "order", "position", "xmult", "mult", "synergy", "anti-synergy")
+        if any(term in message_lower for term in mechanic_terms):
+            parts.extend(["joker rarity", "activation timing", "left to right order", "synergy"])
         return " ".join(p for p in parts if p)
 
 
@@ -154,3 +172,40 @@ def _format_context(chunks: list[dict]) -> str:
         text = chunk["text"][:400].strip()
         parts.append(f"{header}\n{text}")
     return "\n\n".join(parts)
+
+
+def _build_retrieval_only_fallback(
+    user_message: str,
+    game_state: dict | None,
+    chunks: list[dict],
+    exc: Exception,
+) -> str:
+    jokers = [j.get("name", "") for j in (game_state or {}).get("jokers", []) if j.get("name")]
+    top_refs = []
+    for c in chunks[:4]:
+        name = c.get("metadata", {}).get("name") or c.get("metadata", {}).get("source", "context")
+        top_refs.append(f"- {name}")
+    refs = "\n".join(top_refs) if top_refs else "- No indexed references matched strongly."
+    if jokers:
+        order_hint = (
+            "Given your jokers, test order with chips/additive mult earlier and xMult later, "
+            "then keep the layout that most increases final score."
+        )
+    else:
+        order_hint = (
+            "If this is a joker-order question, default to chips first, additive mult second, xMult last, "
+            "then adjust for each joker's trigger timing."
+        )
+
+    return (
+        "LLM is temporarily unavailable for your configured model/key tier, so here's retrieval-only coaching.\n\n"
+        f"Question focus: {user_message}\n"
+        f"Detected jokers: {', '.join(jokers) if jokers else 'not available'}\n\n"
+        "Actionable guidance:\n"
+        f"1) {order_hint}\n"
+        "2) Prefer coherent trigger timing synergies over isolated rarity upgrades.\n"
+        "3) Before buying/selling, check whether the change improves the next 2-3 blinds and preserves economy tempo.\n\n"
+        "Most relevant indexed references:\n"
+        f"{refs}\n\n"
+        f"Service note: {exc}"
+    )

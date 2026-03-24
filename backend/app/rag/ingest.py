@@ -41,6 +41,62 @@ CARD_CATEGORIES = [
     "Blinds",
 ]
 
+JOKER_RARITY_CATEGORIES = {
+    "Common": "Common Jokers",
+    "Uncommon": "Uncommon Jokers",
+    "Rare": "Rare Jokers",
+    "Legendary": "Legendary Jokers",
+}
+
+JOKER_ACTIVATION_CATEGORIES = {
+    "independent": "Activates Independently Jokers",
+    "on_played": "Activates On Played Jokers",
+    "on_scored": "Activates On Scored Jokers",
+    "on_held": "Activates On Held Jokers",
+    "on_discard": "Activates On Discard Jokers",
+    "on_other_jokers": "Activates On Other Jokers",
+}
+
+STRATEGY_GUIDES = [
+    {
+        "name": "Scoring order and joker positioning",
+        "text": (
+            "# Scoring Order and Joker Positioning\n\n"
+            "Balatro scoring generally resolves left-to-right across jokers, and order often changes output.\n"
+            "As a default optimization heuristic: place chip sources first, additive multiplier next, and "
+            "xMult scaling later so multiplicative effects apply to a larger base.\n\n"
+            "When uncertain, compare two candidate orders by estimating final value as:\n"
+            "(base chips + chip adders) * (base mult + additive mult) * multiplicative stack.\n"
+            "If a joker copies another joker, evaluate both copy target and position interactions before locking order."
+        ),
+    },
+    {
+        "name": "Economy and shop discipline",
+        "text": (
+            "# Economy and Shop Discipline\n\n"
+            "Treat economy as compounding power. Preserve interest breakpoints when possible, avoid low-impact rerolls, "
+            "and only break economy for high-leverage pickups (build-defining jokers, survival tools, or immediate blind solutions).\n\n"
+            "A practical loop:\n"
+            "1) secure blind clear consistency,\n"
+            "2) improve scaling engine,\n"
+            "3) spend aggressively only when a shop meaningfully upgrades your trajectory."
+        ),
+    },
+    {
+        "name": "Pivoting builds and anti-synergy checks",
+        "text": (
+            "# Pivoting Builds and Anti-synergy Checks\n\n"
+            "Prioritize coherent scaling over collection quality. A lower-rarity joker that reinforces your current engine "
+            "often beats a disconnected high-rarity pickup.\n\n"
+            "Before buying/selling, check:\n"
+            "- Does this improve my next 2-3 blinds?\n"
+            "- Does it conflict with current triggers (played/held/discard timing)?\n"
+            "- Does it dilute key synergies or hand focus?\n"
+            "If yes, delay pivot unless current line cannot beat upcoming blind pressure."
+        ),
+    },
+]
+
 
 def _fetch(url: str, delay: float = 1.0) -> BeautifulSoup | None:
     try:
@@ -51,6 +107,39 @@ def _fetch(url: str, delay: float = 1.0) -> BeautifulSoup | None:
     except Exception as exc:
         logger.warning("fetch failed %s: %s", url, exc)
         return None
+
+
+def _iter_category_members(category_title: str, delay: float = 0.2) -> Iterator[str]:
+    cmcontinue: str | None = None
+    while True:
+        params = {
+            "action": "query",
+            "format": "json",
+            "list": "categorymembers",
+            "cmtitle": f"Category:{category_title}",
+            "cmtype": "page",
+            "cmnamespace": 0,
+            "cmlimit": "500",
+        }
+        if cmcontinue:
+            params["cmcontinue"] = cmcontinue
+        try:
+            time.sleep(delay)
+            r = requests.get(WIKI_API, headers=HEADERS, params=params, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+        except Exception as exc:
+            logger.warning("fetch failed category %s: %s", category_title, exc)
+            return
+
+        for member in data.get("query", {}).get("categorymembers", []):
+            title = member.get("title")
+            if title:
+                yield title
+
+        cmcontinue = data.get("continue", {}).get("cmcontinue")
+        if not cmcontinue:
+            break
 
 
 def scrape_wiki_card(page_url: str) -> dict | None:
@@ -86,45 +175,67 @@ def iter_wiki_cards() -> Iterator[dict]:
     """Yield all card docs from wiki category pages."""
     seen: set[str] = set()
     for category in CARD_CATEGORIES:
-        cmcontinue: str | None = None
-        while True:
-            params = {
-                "action": "query",
-                "format": "json",
-                "list": "categorymembers",
-                "cmtitle": f"Category:{category}",
-                "cmtype": "page",
-                "cmnamespace": 0,
-                "cmlimit": "500",
-            }
-            if cmcontinue:
-                params["cmcontinue"] = cmcontinue
-            try:
-                time.sleep(0.4)
-                r = requests.get(WIKI_API, headers=HEADERS, params=params, timeout=20)
-                r.raise_for_status()
-                data = r.json()
-            except Exception as exc:
-                logger.warning("fetch failed category %s: %s", category, exc)
-                break
+        for title in _iter_category_members(category, delay=0.4):
+            slug = quote(title.replace(" ", "_"), safe="_()'")
+            url = f"{WIKI_BASE}/w/{slug}"
+            if url in seen:
+                continue
+            seen.add(url)
+            doc = scrape_wiki_card(url)
+            if doc:
+                logger.info("wiki: scraped %s", doc["name"])
+                yield doc
 
-            for member in data.get("query", {}).get("categorymembers", []):
-                title = member.get("title")
-                if not title:
-                    continue
-                slug = quote(title.replace(" ", "_"), safe="_()'")
-                url = f"{WIKI_BASE}/w/{slug}"
-                if url in seen:
-                    continue
-                seen.add(url)
-                doc = scrape_wiki_card(url)
-                if doc:
-                    logger.info("wiki: scraped %s", doc["name"])
-                    yield doc
 
-            cmcontinue = data.get("continue", {}).get("cmcontinue")
-            if not cmcontinue:
-                break
+def iter_mechanics_docs() -> Iterator[dict]:
+    """Build deterministic mechanics docs for jokers from category membership."""
+    rarity_by_joker: dict[str, str] = {}
+    activation_by_joker: dict[str, list[str]] = {}
+
+    for rarity, category in JOKER_RARITY_CATEGORIES.items():
+        for title in _iter_category_members(category):
+            rarity_by_joker[title] = rarity
+
+    for activation_key, category in JOKER_ACTIVATION_CATEGORIES.items():
+        for title in _iter_category_members(category):
+            activation_by_joker.setdefault(title, []).append(activation_key)
+
+    all_jokers = sorted(set(rarity_by_joker) | set(activation_by_joker))
+    for name in all_jokers:
+        rarity = rarity_by_joker.get(name, "Unknown")
+        activation = activation_by_joker.get(name, [])
+        activation_text = ", ".join(sorted(activation)) if activation else "unknown"
+        yield {
+            "name": f"{name} – mechanics",
+            "text": (
+                f"# {name} – Mechanics Summary\n\n"
+                f"- Joker rarity: {rarity}\n"
+                f"- Activation timing tags: {activation_text}\n"
+                "- Positioning note: activation timing and left-to-right ordering can change final scoring output.\n"
+                "- Synergy practice: prioritize coherent trigger timing and scaling over isolated high-rarity value."
+            ),
+            "metadata": {
+                "type": "card",
+                "name": name,
+                "source": "mechanics_corpus",
+                "rarity": rarity,
+                "activation_tags": activation_text,
+            },
+        }
+
+
+def iter_strategy_guides() -> Iterator[dict]:
+    """Yield curated strategy docs for practical coaching context."""
+    for guide in STRATEGY_GUIDES:
+        yield {
+            "name": guide["name"],
+            "text": guide["text"],
+            "metadata": {
+                "type": "guide",
+                "name": guide["name"],
+                "source": "community_meta",
+            },
+        }
 
 
 # ── Synergy corpus (LLM-generated) ───────────────────────────────────────────

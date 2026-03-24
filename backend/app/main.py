@@ -33,6 +33,16 @@ _retriever = None
 _coach = None
 
 
+def _format_stream_error(exc: Exception) -> str:
+    msg = str(exc)
+    if "not available for your subscription tier" in msg.lower():
+        return (
+            "Your current MODEL is not available for this API key tier. "
+            "Set a model your key can access in `.env` (for example via `MODEL=...`) and retry."
+        )
+    return f"Coaching request failed: {msg}"
+
+
 def _get_detector():
     global _detector
     if _detector is None:
@@ -190,12 +200,18 @@ async def _stream_coach(
         )
         # coach.stream_response is an async generator – run it synchronously
         new_loop = _asyncio.new_event_loop()
-        async def _collect():
-            async for chunk in gen:
-                loop.call_soon_threadsafe(queue.put_nowait, chunk)
+        try:
+            async def _collect():
+                async for chunk in gen:
+                    loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+            new_loop.run_until_complete(_collect())
+        except Exception as exc:
+            logger.exception("Coach stream failed")
+            loop.call_soon_threadsafe(queue.put_nowait, _format_stream_error(exc))
             loop.call_soon_threadsafe(queue.put_nowait, None)
-        new_loop.run_until_complete(_collect())
-        new_loop.close()
+        finally:
+            new_loop.close()
 
     import concurrent.futures
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
