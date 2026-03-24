@@ -45,15 +45,17 @@ export function sendChatMessage(message, imageFile, { onState, onText, onDone, o
             onDone();
             return;
           }
+          let event;
           try {
-            const event = JSON.parse(raw);
-            if (event.type === "state") onState(event.data);
-            else if (event.type === "text") onText(event.data);
-            else if (event.type === "error") {
-              throw new Error(event.data || "Chat stream failed");
-            }
+            event = JSON.parse(raw);
           } catch {
             // ignore malformed lines
+            continue;
+          }
+          if (event.type === "state") onState(event.data);
+          else if (event.type === "text") onText(event.data);
+          else if (event.type === "error") {
+            throw new Error(event.data || "Chat stream failed");
           }
         }
       }

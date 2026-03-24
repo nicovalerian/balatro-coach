@@ -217,7 +217,7 @@ async def _stream_coach(
                 loop.call_soon_threadsafe(queue.put_nowait, None)
             new_loop.run_until_complete(_collect())
         except Exception as exc:
-            logger.exception("Coach stream failed")
+            logger.warning("Coach stream failed: %s", exc)
             loop.call_soon_threadsafe(
                 queue.put_nowait,
                 {"type": "error", "data": _format_stream_error(exc)},
