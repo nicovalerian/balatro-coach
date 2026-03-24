@@ -1,3 +1,4 @@
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
@@ -5,6 +6,12 @@ ROOT = Path(__file__).parent.parent
 
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(
+        env_file=str(ROOT.parent / ".env"),
+        env_file_encoding="utf-8",
+        protected_namespaces=(),
+    )
+
     model_access_key: str
     inference_base_url: str = "https://inference.do-ai.run/v1"
     model: str = "anthropic-claude-4.6-sonnet"
@@ -23,10 +30,5 @@ class Settings(BaseSettings):
     # LLM
     max_output_tokens: int = 1024
     stream: bool = True
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
 
 settings = Settings()

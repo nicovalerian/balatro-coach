@@ -18,6 +18,7 @@ import logging
 import time
 from pathlib import Path
 from typing import Iterator
+from urllib.parse import quote
 
 import requests
 from bs4 import BeautifulSoup
@@ -26,17 +27,18 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 WIKI_BASE = "https://balatrowiki.org"
+WIKI_API = f"{WIKI_BASE}/api.php"
 HEADERS = {"User-Agent": "balatro-coach-bot/1.0 (research; non-commercial)"}
 
 # ── Wiki scraping ─────────────────────────────────────────────────────────────
 
 CARD_CATEGORIES = [
-    "/wiki/Category:Jokers",
-    "/wiki/Category:Tarot_Cards",
-    "/wiki/Category:Planet_Cards",
-    "/wiki/Category:Spectral_Cards",
-    "/wiki/Category:Vouchers",
-    "/wiki/Category:Blinds",
+    "Jokers",
+    "Tarot Cards",
+    "Planet Cards",
+    "Spectral Cards",
+    "Vouchers",
+    "Blinds",
 ]
 
 
@@ -83,20 +85,46 @@ def scrape_wiki_card(page_url: str) -> dict | None:
 def iter_wiki_cards() -> Iterator[dict]:
     """Yield all card docs from wiki category pages."""
     seen: set[str] = set()
-    for cat in CARD_CATEGORIES:
-        soup = _fetch(WIKI_BASE + cat)
-        if not soup:
-            continue
-        for a in soup.select(".mw-category a"):
-            href = a.get("href", "")
-            url = WIKI_BASE + href
-            if url in seen:
-                continue
-            seen.add(url)
-            doc = scrape_wiki_card(url)
-            if doc:
-                logger.info("wiki: scraped %s", doc["name"])
-                yield doc
+    for category in CARD_CATEGORIES:
+        cmcontinue: str | None = None
+        while True:
+            params = {
+                "action": "query",
+                "format": "json",
+                "list": "categorymembers",
+                "cmtitle": f"Category:{category}",
+                "cmtype": "page",
+                "cmnamespace": 0,
+                "cmlimit": "500",
+            }
+            if cmcontinue:
+                params["cmcontinue"] = cmcontinue
+            try:
+                time.sleep(0.4)
+                r = requests.get(WIKI_API, headers=HEADERS, params=params, timeout=20)
+                r.raise_for_status()
+                data = r.json()
+            except Exception as exc:
+                logger.warning("fetch failed category %s: %s", category, exc)
+                break
+
+            for member in data.get("query", {}).get("categorymembers", []):
+                title = member.get("title")
+                if not title:
+                    continue
+                slug = quote(title.replace(" ", "_"), safe="_()'")
+                url = f"{WIKI_BASE}/w/{slug}"
+                if url in seen:
+                    continue
+                seen.add(url)
+                doc = scrape_wiki_card(url)
+                if doc:
+                    logger.info("wiki: scraped %s", doc["name"])
+                    yield doc
+
+            cmcontinue = data.get("continue", {}).get("cmcontinue")
+            if not cmcontinue:
+                break
 
 
 # ── Synergy corpus (LLM-generated) ───────────────────────────────────────────
@@ -144,7 +172,7 @@ def generate_synergy_notes(
 
 def save_jsonl(docs: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         for doc in docs:
             f.write(json.dumps(doc, ensure_ascii=False) + "\n")
     logger.info("saved %d docs → %s", len(docs), path)
@@ -153,5 +181,5 @@ def save_jsonl(docs: list[dict], path: Path) -> None:
 def load_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]
