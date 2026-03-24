@@ -18,6 +18,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from openai import APIError, AuthenticationError, RateLimitError
 from PIL import Image
 
 from .config import settings
@@ -40,6 +41,15 @@ def _format_stream_error(exc: Exception) -> str:
             "Your current MODEL is not available for this API key tier. "
             "Set a model your key can access in `.env` (for example via `MODEL=...`) and retry."
         )
+    if isinstance(exc, AuthenticationError):
+        return (
+            "Authentication failed for the configured model/API key. "
+            "Please verify MODEL_ACCESS_KEY and MODEL in `.env`."
+        )
+    if isinstance(exc, RateLimitError):
+        return "The model provider rate-limited this request. Please retry in a moment."
+    if isinstance(exc, APIError):
+        return "Model provider returned an API error. Please retry shortly."
     return f"Coaching request failed: {msg}"
 
 
@@ -152,7 +162,7 @@ async def chat(
             state = _get_extractor().extract(image)
             game_state = state.to_dict()
             low_confidence = state.low_confidence
-        except (FileNotFoundError, RuntimeError) as e:
+        except Exception as e:
             logger.warning("CV failed, will use vision fallback: %s", e)
             # No game_state → coach will use raw image as fallback
             game_state = None
@@ -163,8 +173,8 @@ async def chat(
             yield f"data: {json.dumps({'type': 'state', 'data': game_state})}\n\n"
 
         # Then: stream LLM response
-        async for chunk in _stream_coach(message, game_state, image_bytes, low_confidence):
-            payload = json.dumps({"type": "text", "data": chunk})
+        async for event in _stream_coach(message, game_state, image_bytes, low_confidence):
+            payload = json.dumps(event)
             yield f"data: {payload}\n\n"
 
         yield "data: [DONE]\n\n"
@@ -184,11 +194,11 @@ async def _stream_coach(
     game_state: dict | None,
     image_bytes: bytes | None,
     low_confidence: bool,
-) -> AsyncIterator[str]:
+) -> AsyncIterator[dict]:
     """Run coach.stream_response in a thread pool (sync inference SDK)."""
     coach = _get_coach()
     loop = asyncio.get_event_loop()
-    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
 
     def _run():
         import asyncio as _asyncio
@@ -203,12 +213,15 @@ async def _stream_coach(
         try:
             async def _collect():
                 async for chunk in gen:
-                    loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "text", "data": chunk})
                 loop.call_soon_threadsafe(queue.put_nowait, None)
             new_loop.run_until_complete(_collect())
         except Exception as exc:
             logger.exception("Coach stream failed")
-            loop.call_soon_threadsafe(queue.put_nowait, _format_stream_error(exc))
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"type": "error", "data": _format_stream_error(exc)},
+            )
             loop.call_soon_threadsafe(queue.put_nowait, None)
         finally:
             new_loop.close()
@@ -218,7 +231,7 @@ async def _stream_coach(
     loop.run_in_executor(executor, _run)
 
     while True:
-        chunk = await queue.get()
-        if chunk is None:
+        event = await queue.get()
+        if event is None:
             break
-        yield chunk
+        yield event

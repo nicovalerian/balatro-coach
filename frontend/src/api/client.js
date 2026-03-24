@@ -49,6 +49,9 @@ export function sendChatMessage(message, imageFile, { onState, onText, onDone, o
             const event = JSON.parse(raw);
             if (event.type === "state") onState(event.data);
             else if (event.type === "text") onText(event.data);
+            else if (event.type === "error") {
+              throw new Error(event.data || "Chat stream failed");
+            }
           } catch {
             // ignore malformed lines
           }
