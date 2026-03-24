@@ -1,25 +1,95 @@
 import { useEffect, useRef, useState } from "react";
+import { Menu, RotateCcw, Send, Sparkles } from "lucide-react";
 import { useChat } from "./hooks/useChat";
 import ChatMessage from "./components/ChatMessage";
 import GameStateCard from "./components/GameStateCard";
 import ImageUploader from "./components/ImageUploader";
+import ThemeToggle from "./components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
 const SUGGESTED_PROMPTS = [
   "What should I play next?",
   "What's the best buy in the shop?",
-  "Should I skip this blind?",
+  "Can this line survive the next blind?",
   "How do my jokers synergise?",
   "What hand type should I build toward?",
 ];
+
+function SidebarPanel({ gameState, messages, clearChat, onPrompt }) {
+  return (
+    <div className="flex h-full flex-col gap-4 p-4">
+      <div className="rounded-xl border border-border/80 bg-card/80 p-4">
+        <p className="text-xs text-muted-foreground">
+          Upload a screenshot or describe your state for coaching on blinds, shop decisions, and joker order.
+        </p>
+      </div>
+
+      <Card className="bg-card/80">
+        <CardHeader className="pb-2">
+          <CardTitle className="brand-title text-sm">Game State</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {gameState ? (
+            <GameStateCard state={gameState} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No game state extracted yet. Upload a screenshot to populate this panel.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card/80">
+        <CardHeader className="pb-2">
+          <CardTitle className="brand-title text-sm">Quick Prompts</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {SUGGESTED_PROMPTS.map((prompt) => (
+            <Button
+              key={prompt}
+              variant="ghost"
+              className="h-auto justify-start whitespace-normal text-left text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => onPrompt(prompt)}
+            >
+              {prompt}
+            </Button>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="mt-auto">
+        {messages.length > 0 && (
+          <Button variant="outline" className="w-full" onClick={clearChat}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Clear conversation
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const { messages, gameState, isLoading, sendMessage, clearChat } = useChat();
   const [input, setInput] = useState("");
   const [imageFile, setImageFile] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -27,7 +97,7 @@ export default function App() {
   const handleSend = () => {
     const text = input.trim();
     if (!text && !imageFile) return;
-    sendMessage(text || "(screenshot uploaded – please analyse my game state)", imageFile);
+    sendMessage(text || "(screenshot uploaded - please analyse my game state)", imageFile);
     setInput("");
     setImageFile(null);
   };
@@ -42,265 +112,149 @@ export default function App() {
   const isEmpty = messages.length === 0;
 
   return (
-    <div style={styles.root}>
-      {/* ── Sidebar ──────────────────────────────────────────────── */}
-      <aside style={styles.sidebar}>
-        <div style={styles.logoRow}>
-          <span style={styles.logo}>🃏</span>
-          <span style={styles.logoText}>Balatro Coach</span>
-        </div>
-
-        <p style={styles.sidebarDesc}>
-          Upload a screenshot of your game and ask for coaching advice. The AI reads your jokers,
-          hand, score, and shop automatically.
-        </p>
-
-        <div style={styles.divider} />
-
-        {/* Game state card */}
-        {gameState ? (
-          <>
-            <div style={styles.sidebarLabel}>Game State</div>
-            <GameStateCard state={gameState} />
-          </>
-        ) : (
-          <div style={styles.noState}>No game state extracted yet. Upload a screenshot to start.</div>
-        )}
-
-        <div style={styles.divider} />
-
-        <div style={styles.sidebarLabel}>Quick prompts</div>
-        <div style={styles.quickPrompts}>
-          {SUGGESTED_PROMPTS.map((p) => (
-            <button
-              key={p}
-              style={styles.quickBtn}
-              onClick={() => {
-                setInput(p);
-                textareaRef.current?.focus();
-              }}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        {messages.length > 0 && (
-          <button style={styles.clearBtn} onClick={clearChat}>
-            Clear conversation
-          </button>
-        )}
+    <div className="relative flex h-full bg-background text-foreground">
+      <aside className="hidden h-full w-80 shrink-0 border-r border-border/70 bg-muted/20 lg:block">
+        <SidebarPanel
+          gameState={gameState}
+          messages={messages}
+          clearChat={clearChat}
+          onPrompt={(prompt) => {
+            setInput(prompt);
+            textareaRef.current?.focus();
+          }}
+        />
       </aside>
 
-      {/* ── Main chat ────────────────────────────────────────────── */}
-      <main style={styles.main}>
-        <div style={styles.messageList}>
-          {isEmpty ? (
-            <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>🎯</div>
-              <h2 style={styles.emptyTitle}>Balatro Coach</h2>
-              <p style={styles.emptyDesc}>
-                Upload a screenshot or describe your game state to get expert coaching.
-                Ask about plays, shop decisions, blind skips, or joker synergies.
-              </p>
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="border-b border-border/70 bg-background/90 px-4 py-3 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="icon-sm" className="lg:hidden">
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[90vw] max-w-sm p-0">
+                  <SheetHeader className="border-b border-border/70 p-4">
+                    <SheetTitle className="brand-title text-sm">Balatro Coach</SheetTitle>
+                  </SheetHeader>
+                  <SidebarPanel
+                    gameState={gameState}
+                    messages={messages}
+                    clearChat={clearChat}
+                    onPrompt={(prompt) => {
+                      setInput(prompt);
+                      setSidebarOpen(false);
+                    }}
+                  />
+                </SheetContent>
+              </Sheet>
+              <div>
+                <p className="brand-title text-sm text-foreground">Balatro Coach</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Tactical guidance with screenshot + context memory
+                </p>
+              </div>
             </div>
-          ) : (
-            messages.map((msg) => (
-              <ChatMessage
-                key={msg.id}
-                role={msg.role}
-                content={msg.content}
-                streaming={msg.streaming}
-                imagePreview={msg.imagePreview}
-              />
-            ))
-          )}
-          <div ref={bottomRef} />
-        </div>
 
-        {/* ── Input area ───────────────────────────────────────────── */}
-        <div style={styles.inputArea}>
-          <ImageUploader onFile={setImageFile} disabled={isLoading} />
-
-          <div style={styles.inputRow}>
-            <textarea
-              ref={textareaRef}
-              style={styles.textarea}
-              placeholder="Ask for coaching… or just upload a screenshot"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={2}
-              disabled={isLoading}
-            />
-            <button
-              style={{
-                ...styles.sendBtn,
-                ...(isLoading || (!input.trim() && !imageFile) ? styles.sendBtnDisabled : {}),
-              }}
-              onClick={handleSend}
-              disabled={isLoading || (!input.trim() && !imageFile)}
-            >
-              {isLoading ? <Spinner /> : "Send"}
-            </button>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px]",
+                  isLoading ? "border-accent/50 text-accent" : "border-border text-muted-foreground"
+                )}
+              >
+                {isLoading ? "Analyzing..." : "Ready"}
+              </Badge>
+              <ThemeToggle />
+            </div>
           </div>
-          <p style={styles.hint}>Enter to send · Shift+Enter for new line · Ctrl+V to paste screenshot</p>
+        </header>
+
+        <div className="flex min-h-0 flex-1">
+          <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-1 flex-col">
+            <ScrollArea className="min-h-0 flex-1 px-4 py-4 md:px-6">
+              {isEmpty ? (
+                <section className="mx-auto mt-8 max-w-3xl">
+                  <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card/80 p-6 md:p-8">
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/15 via-secondary/10 to-accent/10" />
+                    <div className="relative space-y-4">
+                      <Badge className="bg-accent/20 text-accent hover:bg-accent/25">Coach Console</Badge>
+                      <h1 className="brand-title text-2xl leading-tight md:text-3xl">
+                        Plan your line, survive the blind, scale the run.
+                      </h1>
+                      <p className="max-w-2xl text-sm text-muted-foreground">
+                        Send a screenshot or describe your hand. I’ll break down blind pressure, score math, joker order, and shop decisions.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {SUGGESTED_PROMPTS.slice(0, 3).map((prompt) => (
+                          <Button
+                            key={prompt}
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setInput(prompt);
+                              textareaRef.current?.focus();
+                            }}
+                          >
+                            <Sparkles className="mr-1.5 h-3 w-3" />
+                            {prompt}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              ) : (
+                <div className="space-y-1">
+                  {messages.map((msg) => (
+                    <ChatMessage
+                      key={msg.id}
+                      role={msg.role}
+                      content={msg.content}
+                      streaming={msg.streaming}
+                      imagePreview={msg.imagePreview}
+                    />
+                  ))}
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </ScrollArea>
+
+            <div className="border-t border-border/70 px-4 py-3 md:px-6">
+              <div className="mx-auto w-full max-w-4xl space-y-3">
+                <ImageUploader onFile={setImageFile} disabled={isLoading} />
+                <Separator />
+                <div className="flex items-end gap-2">
+                  <Textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask for coaching or upload a screenshot..."
+                    rows={2}
+                    disabled={isLoading}
+                    className="min-h-[72px]"
+                  />
+                  <Button
+                    className="h-11 min-w-[88px]"
+                    onClick={handleSend}
+                    disabled={isLoading || (!input.trim() && !imageFile)}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    {isLoading ? "Sending" : "Send"}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Enter to send, Shift+Enter for newline, Ctrl+V to paste screenshot.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
-
-      <style>{`
-        @keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: 0 } }
-        @keyframes spin { to { transform: rotate(360deg) } }
-        * { box-sizing: border-box; }
-        body { margin: 0; background: #0f0f14; font-family: system-ui, sans-serif; }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
-      `}</style>
     </div>
   );
 }
-
-function Spinner() {
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        width: 14,
-        height: 14,
-        border: "2px solid rgba(255,255,255,0.2)",
-        borderTopColor: "#fff",
-        borderRadius: "50%",
-        animation: "spin 0.7s linear infinite",
-      }}
-    />
-  );
-}
-
-const styles = {
-  root: {
-    display: "flex",
-    height: "100vh",
-    color: "#e2e8f0",
-    overflow: "hidden",
-  },
-  // ── Sidebar ───────────────────────────────────────────────────────────────
-  sidebar: {
-    width: 300,
-    flexShrink: 0,
-    background: "#13131a",
-    borderRight: "1px solid rgba(255,255,255,0.07)",
-    display: "flex",
-    flexDirection: "column",
-    padding: "20px 16px",
-    overflowY: "auto",
-    gap: 10,
-  },
-  logoRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 4 },
-  logo: { fontSize: 26 },
-  logoText: { fontSize: 18, fontWeight: 700, color: "#e0e7ff", letterSpacing: "-0.01em" },
-  sidebarDesc: { fontSize: 12, color: "#475569", lineHeight: 1.6, margin: 0 },
-  divider: { height: 1, background: "rgba(255,255,255,0.07)", margin: "4px 0" },
-  sidebarLabel: {
-    fontSize: 11,
-    color: "#475569",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    fontWeight: 500,
-  },
-  noState: {
-    fontSize: 12,
-    color: "#334155",
-    fontStyle: "italic",
-    lineHeight: 1.5,
-  },
-  quickPrompts: { display: "flex", flexDirection: "column", gap: 5 },
-  quickBtn: {
-    background: "rgba(99,102,241,0.08)",
-    border: "1px solid rgba(99,102,241,0.2)",
-    color: "#a5b4fc",
-    borderRadius: 7,
-    padding: "7px 10px",
-    fontSize: 12,
-    cursor: "pointer",
-    textAlign: "left",
-    transition: "background 0.15s",
-  },
-  clearBtn: {
-    background: "transparent",
-    border: "1px solid rgba(255,255,255,0.1)",
-    color: "#64748b",
-    borderRadius: 7,
-    padding: "7px 10px",
-    fontSize: 12,
-    cursor: "pointer",
-    marginTop: 8,
-  },
-  // ── Main ─────────────────────────────────────────────────────────────────
-  main: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    background: "#0f0f14",
-  },
-  messageList: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "24px 28px 12px",
-    display: "flex",
-    flexDirection: "column",
-  },
-  emptyState: {
-    margin: "auto",
-    textAlign: "center",
-    maxWidth: 420,
-    padding: "60px 20px",
-  },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 22, fontWeight: 700, color: "#e0e7ff", margin: "0 0 10px" },
-  emptyDesc: { fontSize: 14, color: "#475569", lineHeight: 1.7, margin: 0 },
-  // ── Input ─────────────────────────────────────────────────────────────────
-  inputArea: {
-    padding: "12px 28px 16px",
-    borderTop: "1px solid rgba(255,255,255,0.07)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    background: "#0f0f14",
-  },
-  inputRow: { display: "flex", gap: 8, alignItems: "flex-end" },
-  textarea: {
-    flex: 1,
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 10,
-    color: "#e2e8f0",
-    padding: "10px 14px",
-    fontSize: 14,
-    resize: "none",
-    outline: "none",
-    lineHeight: 1.5,
-    fontFamily: "inherit",
-  },
-  sendBtn: {
-    background: "#4f46e5",
-    color: "#fff",
-    border: "none",
-    borderRadius: 10,
-    padding: "10px 20px",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-    height: 44,
-    minWidth: 72,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transition: "background 0.15s",
-  },
-  sendBtnDisabled: { background: "#2d2d3d", cursor: "not-allowed" },
-  hint: { fontSize: 11, color: "#334155", margin: 0 },
-};

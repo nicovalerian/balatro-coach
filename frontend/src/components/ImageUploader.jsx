@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Upload, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * ImageUploader
@@ -47,12 +50,12 @@ export default function ImageUploader({ onFile, disabled }) {
 
   return (
     <div
-      style={{
-        ...styles.zone,
-        ...(dragging ? styles.zoneDrag : {}),
-        ...(disabled ? styles.zoneDisabled : {}),
-        ...(preview ? styles.zoneWithPreview : {}),
-      }}
+      className={cn(
+        "rounded-lg border border-dashed border-accent/40 bg-accent/5 transition-colors",
+        dragging && "border-accent bg-accent/10",
+        disabled && "cursor-not-allowed opacity-50",
+        preview && "border-border bg-card"
+      )}
       onClick={() => !disabled && !preview && inputRef.current?.click()}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
@@ -68,15 +71,24 @@ export default function ImageUploader({ onFile, disabled }) {
       />
 
       {preview ? (
-        <div style={styles.previewWrap}>
+        <div className="relative w-full p-2">
           <img src={preview} alt="screenshot" style={styles.previewImg} />
-          <button style={styles.clearBtn} onClick={clear} title="Remove image">✕</button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="secondary"
+            className="absolute right-3 top-3"
+            onClick={clear}
+            title="Remove image"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
         </div>
       ) : (
-        <div style={styles.placeholder}>
-          <div style={styles.icon}>📸</div>
-          <div style={styles.hint}>
-            Drop screenshot · click to browse · paste (Ctrl+V)
+        <div className="flex select-none items-center gap-2 px-3 py-2">
+          <Upload className="h-4 w-4 text-accent" />
+          <div className="text-xs text-muted-foreground">
+            Drop screenshot, click to browse, or paste (Ctrl+V)
           </div>
         </div>
       )}
@@ -85,67 +97,11 @@ export default function ImageUploader({ onFile, disabled }) {
 }
 
 const styles = {
-  zone: {
-    border: "1.5px dashed rgba(99,102,241,0.4)",
-    borderRadius: 10,
-    cursor: "pointer",
-    transition: "border-color 0.2s, background 0.2s",
-    background: "rgba(99,102,241,0.04)",
-    minHeight: 72,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  zoneDrag: {
-    borderColor: "#818cf8",
-    background: "rgba(99,102,241,0.1)",
-  },
-  zoneDisabled: {
-    opacity: 0.5,
-    cursor: "not-allowed",
-  },
-  zoneWithPreview: {
-    border: "1.5px solid rgba(99,102,241,0.35)",
-    cursor: "default",
-    minHeight: 0,
-  },
-  placeholder: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 6,
-    padding: "16px 12px",
-    userSelect: "none",
-  },
-  icon: { fontSize: 22 },
-  hint: { fontSize: 12, color: "#64748b", textAlign: "center" },
-  previewWrap: {
-    position: "relative",
-    width: "100%",
-    padding: 6,
-  },
   previewImg: {
     width: "100%",
-    borderRadius: 7,
+    borderRadius: 10,
     display: "block",
     maxHeight: 220,
     objectFit: "contain",
-  },
-  clearBtn: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    background: "rgba(0,0,0,0.6)",
-    color: "#e2e8f0",
-    border: "none",
-    borderRadius: 5,
-    width: 22,
-    height: 22,
-    cursor: "pointer",
-    fontSize: 11,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    lineHeight: 1,
   },
 };
