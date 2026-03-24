@@ -59,6 +59,37 @@ JOKER_ACTIVATION_CATEGORIES = {
 
 STRATEGY_GUIDES = [
     {
+        "name": "Poker hand base scoring reference (Level 1)",
+        "text": (
+            "# Poker Hand Base Scoring (Level 1)\n\n"
+            "Use these base values before joker/card modifier effects:\n"
+            "- High Card: 5 chips x 1 mult\n"
+            "- Pair: 10 chips x 2 mult\n"
+            "- Two Pair: 20 chips x 2 mult\n"
+            "- Three of a Kind: 30 chips x 3 mult\n"
+            "- Straight: 30 chips x 4 mult\n"
+            "- Flush: 35 chips x 4 mult\n"
+            "- Full House: 40 chips x 4 mult\n"
+            "- Four of a Kind: 60 chips x 7 mult\n"
+            "- Straight Flush: 100 chips x 8 mult\n"
+            "- Royal Flush: 100 chips x 8 mult\n\n"
+            "Card chips are added to base hand chips before multiplication.\n"
+            "Face cards J/Q/K contribute 10 chips each and Ace contributes 11 chips."
+        ),
+    },
+    {
+        "name": "Boss blind constraints and assumptions",
+        "text": (
+            "# Boss Blind Constraints and Assumptions\n\n"
+            "Key constraints for coaching correctness:\n"
+            "- Boss Blinds cannot be skipped.\n"
+            "- Small/Big blinds can be skipped for tags, but Boss Blind must be played.\n"
+            "- If user only says \"Ante X boss blind\" without name/effect, do not assume a specific boss.\n"
+            "- Ask for boss name/effect when that changes line selection.\n"
+            "- In Ante 1, use blind target pressure and remaining hands/discards to plan survival."
+        ),
+    },
+    {
         "name": "Scoring order and joker positioning",
         "text": (
             "# Scoring Order and Joker Positioning\n\n"
@@ -93,6 +124,19 @@ STRATEGY_GUIDES = [
             "- Does it conflict with current triggers (played/held/discard timing)?\n"
             "- Does it dilute key synergies or hand focus?\n"
             "If yes, delay pivot unless current line cannot beat upcoming blind pressure."
+        ),
+    },
+    {
+        "name": "Early ante survival checklist",
+        "text": (
+            "# Early Ante Survival Checklist\n\n"
+            "When asking \"how do I survive\" in ante 1-2:\n"
+            "1) First verify exact blind target and active boss effect.\n"
+            "2) Compute best guaranteed base hand score from current cards.\n"
+            "3) Prioritize line that clears current blind with highest margin, not speculative scaling.\n"
+            "4) If current line is short, identify required chips/mult delta and the most reliable source.\n"
+            "5) Preserve economy breakpoints unless breaking them is required to avoid lethal miss.\n"
+            "6) Avoid anti-synergy pivots that reduce immediate clear probability."
         ),
     },
 ]

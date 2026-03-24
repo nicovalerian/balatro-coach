@@ -5,15 +5,19 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
  *
  * @param {string} message
  * @param {File|null} imageFile
+ * @param {Array<{role: "user"|"assistant", content: string}>} history
  * @param {{ onState: (state: object) => void, onText: (chunk: string) => void, onDone: () => void, onError: (err: Error) => void }} callbacks
  * @returns {AbortController} – call .abort() to cancel
  */
-export function sendChatMessage(message, imageFile, { onState, onText, onDone, onError }) {
+export function sendChatMessage(message, imageFile, history, { onState, onText, onDone, onError }) {
   const ctrl = new AbortController();
 
   const body = new FormData();
   body.append("message", message);
   if (imageFile) body.append("file", imageFile);
+  if (Array.isArray(history) && history.length > 0) {
+    body.append("history", JSON.stringify(history));
+  }
 
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",

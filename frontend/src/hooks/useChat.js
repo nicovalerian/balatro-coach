@@ -81,6 +81,18 @@ export function useChat() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const abortRef = useRef(null);
 
+  const buildHistoryPayload = useCallback((messages) => {
+    const history = [];
+    for (const msg of messages) {
+      if (msg.role !== "user" && msg.role !== "assistant") continue;
+      if (msg.streaming) continue;
+      const content = typeof msg.content === "string" ? msg.content.trim() : "";
+      if (!content) continue;
+      history.push({ role: msg.role, content });
+    }
+    return history.slice(-12);
+  }, []);
+
   const sendMessage = useCallback((text, imageFile) => {
     if (!text.trim() && !imageFile) return;
 
@@ -100,7 +112,9 @@ export function useChat() {
     const assistantMsgId = uid();
     dispatch({ type: "START_ASSISTANT_MESSAGE", id: assistantMsgId });
 
-    abortRef.current = sendChatMessage(text, imageFile, {
+    const history = buildHistoryPayload(state.messages);
+
+    abortRef.current = sendChatMessage(text, imageFile, history, {
       onState: (gameState) => {
         dispatch({ type: "SET_GAME_STATE", state: gameState });
       },
@@ -121,7 +135,7 @@ export function useChat() {
         dispatch({ type: "FINISH_MESSAGE", id: assistantMsgId });
       },
     });
-  }, []);
+  }, [buildHistoryPayload, state.messages]);
 
   const clearChat = useCallback(() => {
     abortRef.current?.abort();

@@ -81,8 +81,10 @@ See `.env.example`. Main settings:
 
 - `MODEL_ACCESS_KEY` (required)
 - `INFERENCE_BASE_URL` (default: `https://inference.do-ai.run/v1`)
-- `MODEL` (default: `anthropic-claude-4.6-sonnet`)
-- `MODEL_FALLBACKS` (default: `openai-gpt-5-mini,glm-5`)
+- `MODEL` (default: `openai-gpt-oss-120b`)
+- `MODEL_FALLBACKS` (default: `nvidia-nemotron-3-super-120b,llama3.3-70b-instruct,glm-5`)
+- `CHAT_HISTORY_MAX_TURNS` (default: `12`, per-session memory window)
+- `VISION_MODELS` (default: empty; comma-separated model IDs allowed to receive `image_url` payloads. Leave empty when relying on CV-only screenshot parsing)
 - `SYNERGY_MODEL` (default: `anthropic-claude-3.5-haiku`)
 
 ---

@@ -41,6 +41,13 @@ SUIT_MAP = {
 }
 
 
+def _normalize_ocr_name(raw: str) -> str:
+    cleaned = " ".join(raw.replace("\n", " ").split())
+    if not cleaned:
+        return ""
+    return cleaned[:80]
+
+
 @dataclass
 class GameState:
     screen_type: str = "unknown"
@@ -104,14 +111,14 @@ class StateExtractor:
         joker_dets = [d for d in entities if d.label == "card_joker"]
         for i, det in enumerate(sorted(joker_dets, key=lambda d: d.x1)):
             confidences.append(det.confidence)
-            name = read_text(det.crop) if det.crop else ""
+            name = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
             state.jokers.append({"name": name or f"Joker {i+1}", "slot": i})
 
         # ── Consumables (tarot / planet / spectral) ───────────────────────────
         for label in ("card_tarot", "card_planet", "card_spectral"):
             for det in [d for d in entities if d.label == label]:
                 confidences.append(det.confidence)
-                name = read_text(det.crop) if det.crop else ""
+                name = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
                 state.consumables.append({"type": label.split("_")[1], "name": name})
 
         # ── UI: score panel ───────────────────────────────────────────────────
@@ -148,7 +155,7 @@ class StateExtractor:
             )]
             state.shop["items"] = []
             for det in shop_items:
-                name = read_text(det.crop) if det.crop else ""
+                name = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
                 state.shop["items"].append({
                     "type": det.label.split("_")[1] if "_" in det.label else det.label,
                     "name": name,

@@ -34,6 +34,36 @@ _retriever = None
 _coach = None
 
 
+def _parse_history(raw_history: str | None) -> list[dict[str, str]]:
+    if not raw_history:
+        return []
+    try:
+        payload = json.loads(raw_history)
+    except json.JSONDecodeError:
+        logger.warning("Invalid history payload: not valid JSON")
+        return []
+    if not isinstance(payload, list):
+        logger.warning("Invalid history payload: expected list")
+        return []
+
+    validated: list[dict[str, str]] = []
+    max_items = max(0, settings.chat_history_max_turns * 2)
+    for item in payload[-max_items:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = item.get("content")
+        if role not in {"user", "assistant"}:
+            continue
+        if not isinstance(content, str):
+            continue
+        text = content.strip()
+        if not text:
+            continue
+        validated.append({"role": role, "content": text[:4000]})
+    return validated
+
+
 def _format_stream_error(exc: Exception) -> str:
     msg = str(exc)
     if "not available for your subscription tier" in msg.lower():
@@ -145,6 +175,7 @@ async def analyze_screenshot(file: UploadFile = File(...)):
 @app.post("/api/chat")
 async def chat(
     message: str = Form(...),
+    history: str | None = Form(default=None),
     file: UploadFile | None = File(default=None),
 ):
     """
@@ -154,6 +185,8 @@ async def chat(
     image_bytes: bytes | None = None
     game_state: dict | None = None
     low_confidence = False
+    cv_failure_reason: str | None = None
+    chat_history = _parse_history(history)
 
     if file:
         image_bytes = await file.read()
@@ -166,6 +199,7 @@ async def chat(
             logger.warning("CV failed, will use vision fallback: %s", e)
             # No game_state → coach will use raw image as fallback
             game_state = None
+            cv_failure_reason = str(e)
 
     async def event_stream() -> AsyncIterator[str]:
         # First: send game_state so UI can render it
@@ -173,7 +207,14 @@ async def chat(
             yield f"data: {json.dumps({'type': 'state', 'data': game_state})}\n\n"
 
         # Then: stream LLM response
-        async for event in _stream_coach(message, game_state, image_bytes, low_confidence):
+        async for event in _stream_coach(
+            message,
+            chat_history,
+            game_state,
+            image_bytes,
+            low_confidence,
+            cv_failure_reason,
+        ):
             payload = json.dumps(event)
             yield f"data: {payload}\n\n"
 
@@ -191,9 +232,11 @@ async def chat(
 
 async def _stream_coach(
     message: str,
+    history: list[dict[str, str]],
     game_state: dict | None,
     image_bytes: bytes | None,
     low_confidence: bool,
+    cv_failure_reason: str | None,
 ) -> AsyncIterator[dict]:
     """Run coach.stream_response in a thread pool (sync inference SDK)."""
     coach = _get_coach()
@@ -204,9 +247,11 @@ async def _stream_coach(
         import asyncio as _asyncio
         gen = coach.stream_response(
             message,
+            history=history,
             game_state=game_state,
             image_bytes=image_bytes,
             low_confidence=low_confidence,
+            cv_failure_reason=cv_failure_reason,
         )
         # coach.stream_response is an async generator – run it synchronously
         new_loop = _asyncio.new_event_loop()
