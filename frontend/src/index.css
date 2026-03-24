@@ -1,0 +1,94 @@
+@import "tw-animate-css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Balatro Joker palette anchors:
+       red: #fd5f55, orange: #fda200, blue: #009cfd, slate: #4f6367, white: #ffffff */
+    --background: 0 0% 100%;
+    --foreground: 198 13% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 198 13% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 198 13% 20%;
+
+    --primary: 11 98% 66%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 38 100% 50%;
+    --secondary-foreground: 198 13% 20%;
+    --accent: 203 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 198 14% 94%;
+    --muted-foreground: 198 13% 36%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 198 15% 85%;
+    --input: 198 15% 88%;
+    --ring: 203 100% 50%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 198 18% 8%;
+    --foreground: 0 0% 96%;
+    --card: 198 15% 12%;
+    --card-foreground: 0 0% 96%;
+    --popover: 198 15% 12%;
+    --popover-foreground: 0 0% 96%;
+
+    --primary: 11 98% 66%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 38 100% 50%;
+    --secondary-foreground: 198 18% 8%;
+    --accent: 203 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 198 14% 18%;
+    --muted-foreground: 198 12% 72%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 198 14% 24%;
+    --input: 198 14% 22%;
+    --ring: 203 100% 50%;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family:
+      "Rajdhani",
+      "Saira Semi Condensed",
+      "Orbitron",
+      "Trebuchet MS",
+      "Segoe UI",
+      sans-serif;
+  }
+}
+
+@layer components {
+  .brand-title {
+    font-family:
+      "Orbitron",
+      "Rajdhani",
+      "Saira Semi Condensed",
+      "Segoe UI",
+      sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}
