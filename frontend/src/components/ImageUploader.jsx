@@ -104,7 +104,7 @@ export default function ImageUploader({
         disabled={disabled}
       />
 
-      <div className="flex min-h-[76px] flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <div className="flex min-h-[64px] flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-[12px] border-2 border-[#3498db]/45 bg-[#3498db]/10">
             <Upload className="h-5 w-5 text-[#78bfff]" />
@@ -129,13 +129,13 @@ export default function ImageUploader({
       </div>
 
       {files.length === 0 ? (
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-2">
           <p className="terminal-copy text-[12px] text-[#aab5ae]">
             Drop screenshots here or paste from the clipboard.
           </p>
         </div>
       ) : (
-        <div className="px-3 pb-3">
+        <div className="px-3 pb-2">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {previews.map((preview, index) => (
               <div key={`${preview.file.name}-${index}`} className="terminal-inset p-2">

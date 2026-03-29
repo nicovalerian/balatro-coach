@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Club, Diamond, Heart, Menu, RotateCcw, Send, Spade } from "lucide-react";
+import {
+  ChevronDown,
+  Club,
+  Diamond,
+  Heart,
+  Menu,
+  RotateCcw,
+  Send,
+  Spade,
+  X,
+} from "lucide-react";
 import { useChat } from "./hooks/useChat";
 import ChatMessage from "./components/ChatMessage";
 import GameStateCard from "./components/GameStateCard";
@@ -94,33 +104,46 @@ function PromptButton({ prompt, onClick }) {
     <Button
       type="button"
       variant="ghost"
-      className="action-button action-button-ghost min-h-[44px] justify-start px-4 py-3 text-left"
+      className="action-button action-button-ghost min-h-[38px] justify-start px-3 py-2 text-left"
       onClick={() => onClick(prompt)}
     >
-      <span className="terminal-copy text-[13px] leading-5 text-inherit">{prompt}</span>
+      <span className="terminal-copy text-[12px] leading-5 text-inherit">{prompt}</span>
     </Button>
   );
 }
 
-function SidebarPanel({ gameState }) {
+function SidebarPanel({ gameState, mobile = false, onClose }) {
   return (
     <div className="flex h-full flex-col p-4 sm:p-5">
       <section className="terminal-panel flex min-h-0 flex-1 flex-col p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <p className="panel-label text-primary">Game State / Run Brief</p>
-          {(gameState ?? EMPTY_GAME_STATE)?.screen_type ? (
-            <span className="status-pill">
-              <span className="status-light" />
-              <span className="pixel-font text-[11px] text-white">
-                {(gameState ?? EMPTY_GAME_STATE).screen_type}
+          <div className="flex items-center gap-2">
+            {(gameState ?? EMPTY_GAME_STATE)?.screen_type ? (
+              <span className="status-pill">
+                <span className="status-light" />
+                <span className="pixel-font text-[11px] text-white">
+                  {(gameState ?? EMPTY_GAME_STATE).screen_type}
+                </span>
               </span>
-            </span>
-          ) : null}
+            ) : null}
+            {mobile ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="action-button action-button-ghost"
+                onClick={onClose}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
         </div>
         <p className="terminal-copy mt-3 text-[12px] leading-6 text-[#c7d0cb]">
           Quick reminders, synergy targets, and hand values update here as screenshots are analyzed.
         </p>
-        <div className="mt-4 min-h-0 flex-1 overflow-hidden">
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pb-2 pr-1">
           <GameStateCard state={gameState ?? EMPTY_GAME_STATE} />
         </div>
       </section>
@@ -144,6 +167,8 @@ export default function App() {
   const [imageFiles, setImageFiles] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [promptsOpen, setPromptsOpen] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -216,8 +241,13 @@ export default function App() {
                   <SheetContent
                     side="left"
                     className="mobile-sheet w-[92vw] max-w-[360px] p-0"
+                    showCloseButton={false}
                   >
-                    <SidebarPanel gameState={gameState} />
+                    <SidebarPanel
+                      gameState={gameState}
+                      mobile
+                      onClose={() => setSidebarOpen(false)}
+                    />
                   </SheetContent>
                 </Sheet>
 
@@ -299,10 +329,10 @@ export default function App() {
               </div>
             </ScrollArea>
 
-            <div className="border-t border-white/10 bg-gradient-to-t from-black/35 to-transparent px-3 pb-3 pt-3 sm:px-5 lg:px-8 lg:pb-5">
+            <div className="border-t border-white/10 bg-gradient-to-t from-black/35 to-transparent px-3 pb-3 pt-2 sm:px-5 lg:px-8 lg:pb-4">
               <div className="mx-auto max-w-[980px]">
-                <div className="composer-shell p-3 sm:p-4">
-                  <div className="flex flex-col gap-3">
+                <div className="composer-shell p-2.5 sm:p-3">
+                  <div className="flex flex-col gap-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="pixel-font text-[16px] text-primary">Question</p>
@@ -320,28 +350,102 @@ export default function App() {
                       ) : null}
                     </div>
 
-                    <div className="question-shell p-3">
+                    <div className="question-shell p-2">
                       <Textarea
                         ref={textareaRef}
                         value={input}
                         onChange={(event) => setInput(event.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder="Ask for the best line, highest score, joker order, or shop decision..."
-                        rows={3}
+                        rows={2}
                         disabled={isLoading}
                         className="terminal-textarea text-[14px] leading-6"
                       />
                     </div>
 
-                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                      <ImageUploader
-                        files={imageFiles}
-                        onFilesChange={setImageFiles}
-                        disabled={isLoading}
-                      />
+                    <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                      <div className="space-y-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button
+                            type="button"
+                            className="dropdown-toggle"
+                            onClick={() => setAttachmentsOpen((value) => !value)}
+                            aria-expanded={attachmentsOpen}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="pixel-font text-[12px] text-[#f2c237]">
+                                Screenshots
+                              </span>
+                              {imageFiles.length > 0 ? (
+                                <span className="dropdown-count">
+                                  {imageFiles.length}
+                                </span>
+                              ) : null}
+                            </span>
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 transition-transform duration-200",
+                                attachmentsOpen && "rotate-180"
+                              )}
+                            />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="dropdown-toggle"
+                            onClick={() => setPromptsOpen((value) => !value)}
+                            aria-expanded={promptsOpen}
+                          >
+                            <span className="pixel-font text-[12px] text-[#d9e6f2]">
+                              Quick Prompts
+                            </span>
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 transition-transform duration-200",
+                                promptsOpen && "rotate-180"
+                              )}
+                            />
+                          </button>
+                        </div>
+
+                        <div
+                          className={cn(
+                            "expandable-section",
+                            attachmentsOpen && "expandable-section-open"
+                          )}
+                        >
+                          <div className="expandable-inner">
+                            <ImageUploader
+                              files={imageFiles}
+                              onFilesChange={setImageFiles}
+                              disabled={isLoading}
+                            />
+                          </div>
+                        </div>
+
+                        <div
+                          className={cn(
+                            "expandable-section",
+                            promptsOpen && "expandable-section-open"
+                          )}
+                        >
+                          <div className="expandable-inner">
+                            <div className="flex flex-wrap gap-1.5">
+                              {QUICK_PROMPTS.map((prompt) => (
+                                <PromptButton
+                                  key={prompt}
+                                  prompt={prompt}
+                                  onClick={handlePrompt}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       <Button
                         type="button"
-                        className="action-button action-button-primary min-h-[56px] min-w-[132px] px-5"
+                        className="action-button action-button-primary min-h-[48px] min-w-[120px] px-4 lg:mt-[2px]"
                         onClick={handleSend}
                         disabled={isLoading || (!input.trim() && imageFiles.length === 0)}
                       >
@@ -354,11 +458,6 @@ export default function App() {
                       <p className="terminal-copy text-[11px] text-[#a6b1aa]">
                         Enter to send. Shift+Enter for newline. Paste screenshots with Ctrl+V.
                       </p>
-                      <div className="flex flex-wrap gap-2">
-                      {QUICK_PROMPTS.map((prompt) => (
-                        <PromptButton key={prompt} prompt={prompt} onClick={handlePrompt} />
-                      ))}
-                      </div>
                     </div>
                   </div>
                 </div>

@@ -327,8 +327,74 @@
       0 0 0 1px rgba(242, 194, 55, 0.06);
   }
 
+  .dropdown-toggle {
+    display: inline-flex;
+    min-height: 36px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 2px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    background: rgba(10, 14, 12, 0.46);
+    padding: 0.45rem 0.8rem;
+    color: var(--offwhite);
+    box-shadow:
+      0 3px 0 rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition:
+      transform 160ms ease,
+      border-color 160ms ease,
+      background 160ms ease;
+  }
+
+  .dropdown-toggle:hover {
+    transform: translateY(-1px);
+    border-color: rgba(242, 194, 55, 0.3);
+  }
+
+  .dropdown-toggle:focus-visible {
+    outline: 2px solid rgba(242, 194, 55, 0.95);
+    outline-offset: 2px;
+  }
+
+  .dropdown-count {
+    display: inline-flex;
+    min-width: 22px;
+    height: 22px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(242, 194, 55, 0.16);
+    border: 1px solid rgba(242, 194, 55, 0.4);
+    font-family: "M6x11plus", "JetBrains Mono", monospace;
+    font-size: 11px;
+    line-height: 1;
+    color: #f7db83;
+  }
+
+  .expandable-section {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+      grid-template-rows 220ms ease,
+      opacity 180ms ease,
+      margin-top 220ms ease;
+  }
+
+  .expandable-section-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  .expandable-inner {
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .terminal-textarea {
-    min-height: 88px;
+    min-height: 64px;
     border: 2px solid rgba(242, 194, 55, 0.7);
     border-radius: 18px;
     background: rgba(8, 12, 10, 0.82);
@@ -350,7 +416,7 @@
   }
 
   .upload-dropzone {
-    min-height: 76px;
+    min-height: 64px;
     border: 2px dashed rgba(242, 194, 55, 0.68);
     border-radius: 18px;
     background: rgba(8, 12, 11, 0.42);
@@ -377,6 +443,10 @@
     border-style: solid;
     border-color: rgba(255, 255, 255, 0.13);
     background: rgba(8, 10, 13, 0.38);
+  }
+
+  .upload-dropzone img {
+    display: block;
   }
 
   .mobile-sheet {
