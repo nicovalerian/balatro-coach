@@ -73,17 +73,17 @@ export default function ChatMessage({
               <span className="card-loader" aria-hidden="true" />
               <div>
                 <p className="pixel-font text-[13px] text-[#f2c237]">Reading The Table</p>
-                <p className="terminal-copy mt-1 text-[13px] text-[#d0d8d3]">
+                <p className="terminal-copy mt-1 text-[12px] text-[#d0d8d3]">
                   Checking blind pressure, score lines, and joker order.
                 </p>
               </div>
             </div>
           ) : isUser ? (
-            <p className="terminal-copy whitespace-pre-wrap text-[14px] leading-7 text-inherit">
+            <p className="terminal-copy whitespace-pre-wrap text-[13px] leading-6 text-inherit">
               {content}
             </p>
           ) : (
-            <div className="markdown-copy terminal-copy text-[14px] leading-7 text-inherit">
+            <div className="markdown-copy terminal-copy text-[13px] leading-6 text-inherit">
               <ReactMarkdown
                 components={{
                   p: ({ children }) => <p className="mb-3">{children}</p>,
