@@ -1,72 +1,155 @@
 import ReactMarkdown from "react-markdown";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/**
- * ChatMessage
- * Renders a single message bubble.
- * role: "user" | "assistant" | "system"
- * streaming: bool – shows a blinking cursor while content arrives
- */
-export default function ChatMessage({ role, content, streaming, imagePreview }) {
+export default function ChatMessage({
+  role,
+  content,
+  streaming,
+  imagePreviews = [],
+}) {
   const isUser = role === "user";
   const isSystem = role === "system";
 
-  return (
-    <div className={cn("mb-4 flex items-start gap-3", isUser && "flex-row-reverse")}>
-      <Avatar size="sm">
-        <AvatarFallback>
-          {isUser ? "🃏" : isSystem ? "⚠️" : "🎯"}
-        </AvatarFallback>
-      </Avatar>
-      <div
-        className={cn(
-          "max-w-[85%] rounded-xl border px-4 py-3 text-sm leading-6 shadow-sm",
-          isUser &&
-            "rounded-tr-sm border-primary/50 bg-primary/15 text-foreground",
-          !isUser &&
-            !isSystem &&
-            "rounded-tl-sm border-border bg-card text-card-foreground",
-          isSystem && "border-secondary/50 bg-secondary/10 text-foreground"
-        )}
-      >
-        {/* Image preview inside user message */}
-        {imagePreview && (
-          <img
-            src={imagePreview}
-            alt="screenshot"
-            className="mb-3 max-h-56 w-full rounded-md object-contain"
-          />
-        )}
+  const meta = isUser
+    ? {
+        name: "You",
+        label: "Player",
+        bubbleClass: "chat-bubble-user",
+        labelClass: "text-[#1b170a]",
+      }
+    : isSystem
+      ? {
+          name: "Table Alert",
+          label: "Warning",
+          bubbleClass: "chat-bubble-system",
+          labelClass: "text-[#ffdede]",
+        }
+      : {
+          name: "Joker Coach",
+          label: streaming ? "Thinking" : "Coach",
+          bubbleClass: "chat-bubble-assistant",
+          labelClass: "text-[#d8ebff]",
+        };
 
-        {/* Text content */}
-        {isUser ? (
-          <span className="whitespace-pre-wrap">{content}</span>
-        ) : (
-          <div className="inline">
-            <ReactMarkdown
-              components={{
-                p: ({ children }) => <p className="mb-2">{children}</p>,
-                ul: ({ children }) => <ul className="mb-2 list-disc pl-5">{children}</ul>,
-                ol: ({ children }) => <ol className="mb-2 list-decimal pl-5">{children}</ol>,
-                li: ({ children }) => <li className="mb-1">{children}</li>,
-                strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                code: ({ inline, children }) =>
-                  inline ? (
-                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-accent">{children}</code>
-                  ) : (
-                    <pre className="my-2 overflow-x-auto rounded-md border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-accent">
-                      <code>{children}</code>
-                    </pre>
-                  ),
-                h3: ({ children }) => <h3 className="mb-1 mt-3 font-heading text-sm text-accent">{children}</h3>,
-              }}
-            >
-              {content}
-            </ReactMarkdown>
-            {streaming && <span className="ml-1 inline-block animate-pulse text-accent">▍</span>}
+  const showLoader = streaming && !content.trim();
+
+  return (
+    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+      <div className={cn("max-w-[92%] sm:max-w-[84%]", isUser && "items-end")}>
+        {!isUser ? (
+          <div className="mb-2 flex items-center gap-2">
+            <span className={cn("pixel-font text-[12px]", meta.labelClass)}>{meta.name}</span>
+            <span className="inline-flex min-h-[24px] items-center justify-center rounded-full border border-white/10 bg-black/20 px-2 py-1">
+              <span className={cn("pixel-font text-[10px]", meta.labelClass)}>{meta.label}</span>
+            </span>
           </div>
-        )}
+        ) : null}
+
+        <div className={cn("chat-bubble", meta.bubbleClass)}>
+          {imagePreviews.length > 0 ? (
+            <div
+              className={cn(
+                "mb-4 grid gap-3",
+                imagePreviews.length === 1 ? "grid-cols-1" : "grid-cols-2"
+              )}
+            >
+              {imagePreviews.map((preview, index) => (
+                <img
+                  key={`${preview}-${index}`}
+                  src={preview}
+                  alt={`uploaded screenshot ${index + 1}`}
+                  className={cn(
+                    "w-full object-contain",
+                    imagePreviews.length === 3 && index === 0 && "col-span-2"
+                  )}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {showLoader ? (
+            <div className="flex items-center gap-3">
+              <span className="card-loader" aria-hidden="true" />
+              <div>
+                <p className="pixel-font text-[13px] text-[#f2c237]">Reading The Table</p>
+                <p className="terminal-copy mt-1 text-[13px] text-[#d0d8d3]">
+                  Checking blind pressure, score lines, and joker order.
+                </p>
+              </div>
+            </div>
+          ) : isUser ? (
+            <p className="terminal-copy whitespace-pre-wrap text-[14px] leading-7 text-inherit">
+              {content}
+            </p>
+          ) : (
+            <div className="markdown-copy terminal-copy text-[14px] leading-7 text-inherit">
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => <p className="mb-3">{children}</p>,
+                  ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5">{children}</ul>,
+                  ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5">{children}</ol>,
+                  li: ({ children }) => <li>{children}</li>,
+                  strong: ({ children }) => (
+                    <strong className="font-semibold text-[#f2c237]">{children}</strong>
+                  ),
+                  a: ({ children, href }) => (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#8ac9ff] underline underline-offset-4"
+                    >
+                      {children}
+                    </a>
+                  ),
+                  code: ({ inline, children }) =>
+                    inline ? (
+                      <code className="rounded-[8px] border border-white/10 bg-black/25 px-2 py-1 text-[12px] text-[#f2c237]">
+                        {children}
+                      </code>
+                    ) : (
+                      <pre className="mb-3 overflow-x-auto rounded-[14px] border border-white/10 bg-black/30 px-4 py-3 text-[12px] leading-6 text-[#e3ece7]">
+                        <code>{children}</code>
+                      </pre>
+                    ),
+                  h1: ({ children }) => (
+                    <h1 className="pixel-font mb-3 text-[18px] text-[#f2c237]">{children}</h1>
+                  ),
+                  h2: ({ children }) => (
+                    <h2 className="pixel-font mb-3 text-[16px] text-[#f2c237]">{children}</h2>
+                  ),
+                  h3: ({ children }) => (
+                    <h3 className="pixel-font mb-2 text-[14px] text-[#f2c237]">{children}</h3>
+                  ),
+                  blockquote: ({ children }) => (
+                    <blockquote className="mb-3 border-l-2 border-[#3498db] pl-4 text-[#dceeff]">
+                      {children}
+                    </blockquote>
+                  ),
+                }}
+              >
+                {content}
+              </ReactMarkdown>
+
+              {streaming ? (
+                <div className="mt-3 flex items-center gap-2 text-[#f2c237]">
+                  <span className="card-loader scale-75" aria-hidden="true" />
+                  <span className="pixel-font text-[11px]">Building Response</span>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {isSystem ? (
+            <div className="mt-3 flex items-center gap-2 text-[#ffdede]">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="terminal-copy text-[12px]">
+                Something interrupted the request. Retrying is safe.
+              </span>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

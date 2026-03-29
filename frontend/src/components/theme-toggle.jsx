@@ -26,13 +26,13 @@ export default function ThemeToggle() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <label className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1">
-          <Moon className="h-3.5 w-3.5 text-muted-foreground" />
+        <label className="inline-flex items-center gap-2 rounded-md balatro-card px-3 py-1.5 cursor-pointer hover:scale-105 transition-transform">
+          <Moon className="h-4 w-4 text-accent" />
           <Switch checked={isLight} onCheckedChange={handleChange} />
-          <Sun className="h-3.5 w-3.5 text-muted-foreground" />
+          <Sun className="h-4 w-4 text-primary" />
         </label>
       </TooltipTrigger>
-      <TooltipContent side="bottom">
+      <TooltipContent side="bottom" className="balatro-card text-xs">
         {isLight ? "Light mode" : "Dark mode"}
       </TooltipContent>
     </Tooltip>

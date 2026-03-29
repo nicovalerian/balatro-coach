@@ -1,0 +1,271 @@
+import { useEffect, useRef, useState } from "react";
+import { Menu, RotateCcw, Send, Sparkles, Spade, Heart, Club, Diamond } from "lucide-react";
+import { useChat } from "./hooks/useChat";
+import ChatMessage from "./components/ChatMessage";
+import GameStateCard from "./components/GameStateCard";
+import ImageUploader from "./components/ImageUploader";
+import ThemeToggle from "./components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
+
+const SUGGESTED_PROMPTS = [
+  "What should I play next?",
+  "What's the best buy in the shop?",
+  "Can this line survive the next blind?",
+  "How do my jokers synergise?",
+  "What hand type should I build toward?",
+];
+
+function SidebarPanel({ gameState, messages, clearChat, onPrompt }) {
+  return (
+    <div className="flex h-full flex-col gap-4 p-4">
+      <div className="balatro-card rounded-lg p-4">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Upload a screenshot or describe your state for coaching on blinds, shop decisions, and joker order.
+        </p>
+      </div>
+
+      <Card className="balatro-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="brand-title text-sm flex items-center gap-2">
+            <Spade className="h-4 w-4" />
+            Game State
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {gameState ? (
+            <GameStateCard state={gameState} />
+          ) : (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              No game state extracted yet. Upload a screenshot to populate this panel.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="balatro-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="brand-title text-sm flex items-center gap-2">
+            <Diamond className="h-4 w-4 text-primary" />
+            Quick Prompts
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {SUGGESTED_PROMPTS.map((prompt) => (
+            <Button
+              key={prompt}
+              variant="ghost"
+              className="h-auto justify-start whitespace-normal text-left text-xs hover:bg-muted/50"
+              onClick={() => onPrompt(prompt)}
+            >
+              <Sparkles className="mr-2 h-3 w-3 shrink-0" />
+              {prompt}
+            </Button>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="mt-auto">
+        {messages.length > 0 && (
+          <Button 
+            variant="outline" 
+            className="w-full balatro-button" 
+            onClick={clearChat}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Clear conversation
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const { messages, gameState, isLoading, sendMessage, clearChat } = useChat();
+  const [input, setInput] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const bottomRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text && !imageFile) return;
+    sendMessage(text || "(screenshot uploaded - please analyse my game state)", imageFile);
+    setInput("");
+    setImageFile(null);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const isEmpty = messages.length === 0;
+
+  return (
+    <div className="relative flex h-full bg-background text-foreground">
+      <aside className="hidden h-full w-80 shrink-0 border-r border-border/70 bg-muted/20 lg:block">
+        <SidebarPanel
+          gameState={gameState}
+          messages={messages}
+          clearChat={clearChat}
+          onPrompt={(prompt) => {
+            setInput(prompt);
+            textareaRef.current?.focus();
+          }}
+        />
+      </aside>
+
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="border-b border-border/70 bg-background/90 px-4 py-3 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="icon-sm" className="lg:hidden">
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[90vw] max-w-sm p-0">
+                  <SheetHeader className="border-b border-border/70 p-4">
+                    <SheetTitle className="brand-title text-sm">Balatro Coach</SheetTitle>
+                  </SheetHeader>
+                  <SidebarPanel
+                    gameState={gameState}
+                    messages={messages}
+                    clearChat={clearChat}
+                    onPrompt={(prompt) => {
+                      setInput(prompt);
+                      setSidebarOpen(false);
+                    }}
+                  />
+                </SheetContent>
+              </Sheet>
+              <div>
+                <p className="brand-title text-sm text-foreground">Balatro Coach</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Tactical guidance with screenshot + context memory
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px]",
+                  isLoading ? "border-accent/50 text-accent" : "border-border text-muted-foreground"
+                )}
+              >
+                {isLoading ? "Analyzing..." : "Ready"}
+              </Badge>
+              <ThemeToggle />
+            </div>
+          </div>
+        </header>
+
+        <div className="flex min-h-0 flex-1">
+          <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-1 flex-col">
+            <ScrollArea className="min-h-0 flex-1 px-4 py-4 md:px-6">
+              {isEmpty ? (
+                <section className="mx-auto mt-8 max-w-3xl">
+                  <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card/80 p-6 md:p-8">
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/15 via-secondary/10 to-accent/10" />
+                    <div className="relative space-y-4">
+                      <Badge className="bg-accent/20 text-accent hover:bg-accent/25">Coach Console</Badge>
+                      <h1 className="brand-title text-2xl leading-tight md:text-3xl">
+                        Plan your line, survive the blind, scale the run.
+                      </h1>
+                      <p className="max-w-2xl text-sm text-muted-foreground">
+                        Send a screenshot or describe your hand. I’ll break down blind pressure, score math, joker order, and shop decisions.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {SUGGESTED_PROMPTS.slice(0, 3).map((prompt) => (
+                          <Button
+                            key={prompt}
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setInput(prompt);
+                              textareaRef.current?.focus();
+                            }}
+                          >
+                            <Sparkles className="mr-1.5 h-3 w-3" />
+                            {prompt}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              ) : (
+                <div className="space-y-1">
+                  {messages.map((msg) => (
+                    <ChatMessage
+                      key={msg.id}
+                      role={msg.role}
+                      content={msg.content}
+                      streaming={msg.streaming}
+                      imagePreview={msg.imagePreview}
+                    />
+                  ))}
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </ScrollArea>
+
+            <div className="border-t border-border/70 px-4 py-3 md:px-6">
+              <div className="mx-auto w-full max-w-4xl space-y-3">
+                <ImageUploader onFile={setImageFile} disabled={isLoading} />
+                <Separator />
+                <div className="flex items-end gap-2">
+                  <Textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask for coaching or upload a screenshot..."
+                    rows={2}
+                    disabled={isLoading}
+                    className="min-h-[72px]"
+                  />
+                  <Button
+                    className="h-11 min-w-[88px]"
+                    onClick={handleSend}
+                    disabled={isLoading || (!input.trim() && !imageFile)}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    {isLoading ? "Sending" : "Send"}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Enter to send, Shift+Enter for newline, Ctrl+V to paste screenshot.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

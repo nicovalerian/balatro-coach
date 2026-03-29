@@ -1,14 +1,6 @@
 import { useCallback, useReducer, useRef } from "react";
 import { sendChatMessage } from "../api/client";
 
-/**
- * useChat hook
- * Manages the full conversation state including SSE streaming,
- * game state updates, and image attachments.
- *
- * Returns: { messages, gameState, isLoading, sendMessage, clearChat }
- */
-
 const initialState = {
   messages: [],
   gameState: null,
@@ -22,7 +14,12 @@ function reducer(state, action) {
         ...state,
         messages: [
           ...state.messages,
-          { id: action.id, role: "user", content: action.content, imagePreview: action.imagePreview },
+          {
+            id: action.id,
+            role: "user",
+            content: action.content,
+            imagePreviews: action.imagePreviews,
+          },
         ],
         isLoading: true,
       };
@@ -36,19 +33,24 @@ function reducer(state, action) {
         ],
       };
 
-    case "APPEND_TEXT": {
-      const msgs = state.messages.map((m) =>
-        m.id === action.id ? { ...m, content: m.content + action.text } : m
-      );
-      return { ...state, messages: msgs };
-    }
+    case "APPEND_TEXT":
+      return {
+        ...state,
+        messages: state.messages.map((message) =>
+          message.id === action.id
+            ? { ...message, content: message.content + action.text }
+            : message
+        ),
+      };
 
-    case "FINISH_MESSAGE": {
-      const msgs = state.messages.map((m) =>
-        m.id === action.id ? { ...m, streaming: false } : m
-      );
-      return { ...state, messages: msgs, isLoading: false };
-    }
+    case "FINISH_MESSAGE":
+      return {
+        ...state,
+        messages: state.messages.map((message) =>
+          message.id === action.id ? { ...message, streaming: false } : message
+        ),
+        isLoading: false,
+      };
 
     case "SET_GAME_STATE":
       return { ...state, gameState: action.state };
@@ -63,9 +65,6 @@ function reducer(state, action) {
         isLoading: false,
       };
 
-    case "SET_LOADING":
-      return { ...state, isLoading: action.value };
-
     case "CLEAR":
       return initialState;
 
@@ -74,68 +73,65 @@ function reducer(state, action) {
   }
 }
 
-let _idCounter = 0;
-const uid = () => `msg_${++_idCounter}_${Date.now()}`;
+let idCounter = 0;
+const uid = () => `msg_${++idCounter}_${Date.now()}`;
 
 export function useChat() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const abortRef = useRef(null);
 
   const buildHistoryPayload = useCallback((messages) => {
-    const history = [];
-    for (const msg of messages) {
-      if (msg.role !== "user" && msg.role !== "assistant") continue;
-      if (msg.streaming) continue;
-      const content = typeof msg.content === "string" ? msg.content.trim() : "";
-      if (!content) continue;
-      history.push({ role: msg.role, content });
-    }
-    return history.slice(-12);
+    return messages
+      .filter((message) => {
+        if (message.role !== "user" && message.role !== "assistant") return false;
+        if (message.streaming) return false;
+        return typeof message.content === "string" && message.content.trim().length > 0;
+      })
+      .map((message) => ({ role: message.role, content: message.content.trim() }))
+      .slice(-12);
   }, []);
 
-  const sendMessage = useCallback((text, imageFile) => {
-    if (!text.trim() && !imageFile) return;
+  const sendMessage = useCallback(
+    (text, imageFiles = []) => {
+      if (!text.trim() && imageFiles.length === 0) return;
 
-    // Cancel any in-flight request
-    abortRef.current?.abort();
+      abortRef.current?.abort();
 
-    const userMsgId = uid();
-    const imagePreview = imageFile ? URL.createObjectURL(imageFile) : null;
+      const userMessageId = uid();
+      const imagePreviews = imageFiles.map((file) => URL.createObjectURL(file));
 
-    dispatch({
-      type: "ADD_USER_MESSAGE",
-      id: userMsgId,
-      content: text,
-      imagePreview,
-    });
+      dispatch({
+        type: "ADD_USER_MESSAGE",
+        id: userMessageId,
+        content: text,
+        imagePreviews,
+      });
 
-    const assistantMsgId = uid();
-    dispatch({ type: "START_ASSISTANT_MESSAGE", id: assistantMsgId });
+      const assistantMessageId = uid();
+      dispatch({ type: "START_ASSISTANT_MESSAGE", id: assistantMessageId });
 
-    const history = buildHistoryPayload(state.messages);
+      const history = buildHistoryPayload(state.messages);
 
-    abortRef.current = sendChatMessage(text, imageFile, history, {
-      onState: (gameState) => {
-        dispatch({ type: "SET_GAME_STATE", state: gameState });
-      },
-      onText: (chunk) => {
-        dispatch({ type: "APPEND_TEXT", id: assistantMsgId, text: chunk });
-      },
-      onDone: () => {
-        dispatch({ type: "FINISH_MESSAGE", id: assistantMsgId });
-        abortRef.current = null;
-      },
-      onError: (err) => {
-        dispatch({
-          type: "ADD_SYSTEM_MESSAGE",
-          id: uid(),
-          content: `Error: ${err.message}. Please try again.`,
-        });
-        // Remove the empty assistant bubble
-        dispatch({ type: "FINISH_MESSAGE", id: assistantMsgId });
-      },
-    });
-  }, [buildHistoryPayload, state.messages]);
+      abortRef.current = sendChatMessage(text, imageFiles, history, {
+        onState: (gameState) => dispatch({ type: "SET_GAME_STATE", state: gameState }),
+        onText: (chunk) =>
+          dispatch({ type: "APPEND_TEXT", id: assistantMessageId, text: chunk }),
+        onDone: () => {
+          dispatch({ type: "FINISH_MESSAGE", id: assistantMessageId });
+          abortRef.current = null;
+        },
+        onError: (error) => {
+          dispatch({
+            type: "ADD_SYSTEM_MESSAGE",
+            id: uid(),
+            content: `Error: ${error.message}. Please try again.`,
+          });
+          dispatch({ type: "FINISH_MESSAGE", id: assistantMessageId });
+        },
+      });
+    },
+    [buildHistoryPayload, state.messages]
+  );
 
   const clearChat = useCallback(() => {
     abortRef.current?.abort();

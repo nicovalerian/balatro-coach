@@ -1,107 +1,171 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Upload, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ImagePlus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/**
- * ImageUploader
- * Supports: click to browse, drag-and-drop, paste (Ctrl+V).
- * Shows a preview thumbnail. Calls onFile(File) when an image is selected.
- */
-export default function ImageUploader({ onFile, disabled }) {
-  const [preview, setPreview] = useState(null);
+const MAX_FILES = 3;
+
+export default function ImageUploader({
+  files = [],
+  onFilesChange,
+  disabled,
+}) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
 
-  const handleFile = useCallback(
-    (file) => {
-      if (!file || !file.type.startsWith("image/")) return;
-      setPreview(URL.createObjectURL(file));
-      onFile(file);
-    },
-    [onFile]
+  const previews = useMemo(
+    () =>
+      files.map((file) => ({
+        file,
+        url: URL.createObjectURL(file),
+      })),
+    [files]
   );
 
-  // Paste support
-  useEffect(() => {
-    const onPaste = (e) => {
-      const item = Array.from(e.clipboardData?.items ?? []).find(
-        (i) => i.kind === "file" && i.type.startsWith("image/")
+  useEffect(
+    () => () => {
+      previews.forEach((preview) => URL.revokeObjectURL(preview.url));
+    },
+    [previews]
+  );
+
+  const appendFiles = useCallback(
+    (incomingFiles) => {
+      const nextFiles = Array.from(incomingFiles ?? []).filter(
+        (file) => file?.type?.startsWith("image/")
       );
-      if (item) handleFile(item.getAsFile());
+      if (nextFiles.length === 0) return;
+
+      const remainingSlots = Math.max(0, MAX_FILES - files.length);
+      if (remainingSlots === 0) return;
+
+      onFilesChange([...files, ...nextFiles.slice(0, remainingSlots)]);
+    },
+    [files, onFilesChange]
+  );
+
+  useEffect(() => {
+    const onPaste = (event) => {
+      const pastedFiles = Array.from(event.clipboardData?.items ?? [])
+        .filter((entry) => entry.kind === "file" && entry.type.startsWith("image/"))
+        .map((entry) => entry.getAsFile())
+        .filter(Boolean);
+
+      if (pastedFiles.length > 0) {
+        appendFiles(pastedFiles);
+      }
     };
+
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [handleFile]);
+  }, [appendFiles]);
 
-  const onDrop = (e) => {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    handleFile(file);
+  const removeFileAt = (indexToRemove) => {
+    onFilesChange(files.filter((_, index) => index !== indexToRemove));
+    if (inputRef.current) inputRef.current.value = "";
   };
 
-  const clear = (e) => {
-    e.stopPropagation();
-    setPreview(null);
-    onFile(null);
-    if (inputRef.current) inputRef.current.value = "";
+  const openPicker = () => {
+    if (!disabled) {
+      inputRef.current?.click();
+    }
   };
 
   return (
     <div
       className={cn(
-        "rounded-lg border border-dashed border-accent/40 bg-accent/5 transition-colors",
-        dragging && "border-accent bg-accent/10",
-        disabled && "cursor-not-allowed opacity-50",
-        preview && "border-border bg-card"
+        "upload-dropzone",
+        dragging && "upload-dropzone-active",
+        files.length > 0 && "upload-dropzone-preview",
+        disabled && "cursor-not-allowed opacity-60"
       )}
-      onClick={() => !disabled && !preview && inputRef.current?.click()}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        if (!disabled) setDragging(true);
+      }}
       onDragLeave={() => setDragging(false)}
-      onDrop={disabled ? undefined : onDrop}
+      onDrop={
+        disabled
+          ? undefined
+          : (event) => {
+              event.preventDefault();
+              setDragging(false);
+              appendFiles(event.dataTransfer.files);
+            }
+      }
     >
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
-        style={{ display: "none" }}
-        onChange={(e) => handleFile(e.target.files?.[0])}
+        multiple
+        className="hidden"
+        onChange={(event) => appendFiles(event.target.files)}
         disabled={disabled}
       />
 
-      {preview ? (
-        <div className="relative w-full p-2">
-          <img src={preview} alt="screenshot" style={styles.previewImg} />
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="secondary"
-            className="absolute right-3 top-3"
-            onClick={clear}
-            title="Remove image"
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
+      <div className="flex min-h-[76px] flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-[12px] border-2 border-[#3498db]/45 bg-[#3498db]/10">
+            <Upload className="h-5 w-5 text-[#78bfff]" />
+          </div>
+          <div>
+            <p className="pixel-font text-[13px] text-[#f0f0f0]">Screenshots</p>
+            <p className="terminal-copy text-[12px] text-[#b6c0ba]">
+              Add up to 3 images from blind, hand, shop, or joker layout.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          className="action-button action-button-secondary min-h-[44px] px-4"
+          onClick={openPicker}
+          disabled={disabled || files.length >= MAX_FILES}
+        >
+          <ImagePlus className="mr-2 h-4 w-4" />
+          {files.length > 0 ? "Add Screenshot" : "Choose Images"}
+        </Button>
+      </div>
+
+      {files.length === 0 ? (
+        <div className="px-4 pb-3">
+          <p className="terminal-copy text-[12px] text-[#aab5ae]">
+            Drop screenshots here or paste from the clipboard.
+          </p>
         </div>
       ) : (
-        <div className="flex select-none items-center gap-2 px-3 py-2">
-          <Upload className="h-4 w-4 text-accent" />
-          <div className="text-xs text-muted-foreground">
-            Drop screenshot, click to browse, or paste (Ctrl+V)
+        <div className="px-3 pb-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {previews.map((preview, index) => (
+              <div key={`${preview.file.name}-${index}`} className="terminal-inset p-2">
+                <div className="relative">
+                  <img
+                    src={preview.url}
+                    alt={`screenshot preview ${index + 1}`}
+                    className="h-[116px] w-full rounded-[12px] object-cover"
+                  />
+                  <Button
+                    type="button"
+                    className="action-button action-button-danger absolute right-2 top-2 min-h-[34px] px-3"
+                    onClick={() => removeFileAt(index)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="terminal-copy truncate text-[12px] text-[#dce4df]">
+                    {preview.file.name}
+                  </p>
+                  <span className="pixel-font text-[11px] text-[#f2c237]">
+                    {index + 1}/{MAX_FILES}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
     </div>
   );
 }
-
-const styles = {
-  previewImg: {
-    width: "100%",
-    borderRadius: 10,
-    display: "block",
-    maxHeight: 220,
-    objectFit: "contain",
-  },
-};

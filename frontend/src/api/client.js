@@ -1,20 +1,22 @@
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-/**
- * Send a chat message (with optional image) and call callbacks as events arrive.
- *
- * @param {string} message
- * @param {File|null} imageFile
- * @param {Array<{role: "user"|"assistant", content: string}>} history
- * @param {{ onState: (state: object) => void, onText: (chunk: string) => void, onDone: () => void, onError: (err: Error) => void }} callbacks
- * @returns {AbortController} – call .abort() to cancel
- */
-export function sendChatMessage(message, imageFile, history, { onState, onText, onDone, onError }) {
+export function sendChatMessage(
+  message,
+  imageFiles,
+  history,
+  { onState, onText, onDone, onError }
+) {
   const ctrl = new AbortController();
 
   const body = new FormData();
   body.append("message", message);
-  if (imageFile) body.append("file", imageFile);
+
+  if (Array.isArray(imageFiles)) {
+    imageFiles.forEach((file) => {
+      body.append("files", file);
+    });
+  }
+
   if (Array.isArray(history) && history.length > 0) {
     body.append("history", JSON.stringify(history));
   }
@@ -40,42 +42,39 @@ export function sendChatMessage(message, imageFile, history, { onState, onText, 
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop(); // keep incomplete last line
+        buffer = lines.pop();
 
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const raw = line.slice(6).trim();
+
           if (raw === "[DONE]") {
             onDone();
             return;
           }
+
           let event;
           try {
             event = JSON.parse(raw);
           } catch {
-            // ignore malformed lines
             continue;
           }
+
           if (event.type === "state") onState(event.data);
           else if (event.type === "text") onText(event.data);
-          else if (event.type === "error") {
-            throw new Error(event.data || "Chat stream failed");
-          }
+          else if (event.type === "error") throw new Error(event.data || "Chat stream failed");
         }
       }
+
       onDone();
     })
-    .catch((err) => {
-      if (err.name !== "AbortError") onError(err);
+    .catch((error) => {
+      if (error.name !== "AbortError") onError(error);
     });
 
   return ctrl;
 }
 
-/**
- * Analyze a screenshot without asking a question.
- * Returns game state JSON.
- */
 export async function analyzeScreenshot(file) {
   const body = new FormData();
   body.append("file", file);

@@ -96,22 +96,25 @@ class BalatroCoach:
         user_message: str,
         history: list[dict[str, str]] | None = None,
         game_state: dict | None = None,
-        image_bytes: bytes | None = None,
+        additional_game_states: list[dict] | None = None,
+        image_bytes_list: list[bytes] | None = None,
         low_confidence: bool = False,
         cv_failure_reason: str | None = None,
     ) -> AsyncIterator[str]:
         """Yield text chunks as they stream from the configured inference model."""
+        additional_game_states = additional_game_states or []
+        image_bytes_list = image_bytes_list or []
 
         # ── Low confidence: ask for clarification ────────────────────────────
         if low_confidence and game_state and game_state.get("low_confidence"):
             yield LOW_CONFIDENCE_MESSAGE
             return
-        if image_bytes and not game_state and cv_failure_reason and not self._vision_models:
+        if image_bytes_list and not game_state and cv_failure_reason and not self._vision_models:
             yield IMAGE_UNAVAILABLE_MESSAGE
             return
 
         # ── Build retrieval query ─────────────────────────────────────────────
-        rag_query = self._build_rag_query(user_message, game_state)
+        rag_query = self._build_rag_query(user_message, game_state, additional_game_states)
         context_chunks = self._retriever.retrieve(rag_query, top_k=settings.retrieval_top_k)
         rag_context = _format_context(context_chunks)
         hand_eval_note = build_hand_eval_note_from_text(user_message)
@@ -124,9 +127,10 @@ class BalatroCoach:
         user_content = self._build_user_content(
             user_message=user_message,
             game_state=game_state,
+            additional_game_states=additional_game_states,
             rag_context=rag_context,
             hand_eval_note=hand_eval_note,
-            image_bytes=image_bytes,
+            image_bytes_list=image_bytes_list,
             allow_image=False,
             cv_failure_reason=cv_failure_reason,
         )
@@ -140,7 +144,7 @@ class BalatroCoach:
             is_last = index == len(self._models) - 1
             has_text_output = False
             allow_image = (
-                image_bytes is not None
+                bool(image_bytes_list)
                 and (low_confidence or not game_state)
                 and self._supports_vision(model_name)
             )
@@ -149,9 +153,10 @@ class BalatroCoach:
                 content_with_image = self._build_user_content(
                     user_message=user_message,
                     game_state=game_state,
+                    additional_game_states=additional_game_states,
                     rag_context=rag_context,
                     hand_eval_note=hand_eval_note,
-                    image_bytes=image_bytes,
+                    image_bytes_list=image_bytes_list,
                     allow_image=True,
                     cv_failure_reason=cv_failure_reason,
                 )
@@ -249,22 +254,29 @@ class BalatroCoach:
         if last_error is not None:
             raise last_error
 
-    def _build_rag_query(self, user_message: str, game_state: dict | None) -> str:
+    def _build_rag_query(
+        self,
+        user_message: str,
+        game_state: dict | None,
+        additional_game_states: list[dict],
+    ) -> str:
         """Enrich retrieval query with joker names from game state."""
         parts = [user_message]
         if parse_cards_from_text(user_message):
             parts.extend(["poker hands base chips mult table", "balatro hand scoring"])
-        if game_state:
-            jokers = [j.get("name", "") for j in game_state.get("jokers", [])]
+        for state in [game_state, *additional_game_states]:
+            if not state:
+                continue
+            jokers = [j.get("name", "") for j in state.get("jokers", [])]
             parts.extend(jokers)
-            shop_items = [i.get("name", "") for i in game_state.get("shop", {}).get("items", [])]
+            shop_items = [i.get("name", "") for i in state.get("shop", {}).get("items", [])]
             parts.extend(shop_items)
-            if game_state.get("ante") is not None:
-                parts.append(f"ante {game_state['ante']}")
-            blind = game_state.get("blind", {}) or {}
+            if state.get("ante") is not None:
+                parts.append(f"ante {state['ante']}")
+            blind = state.get("blind", {}) or {}
             if blind.get("name"):
                 parts.append(str(blind["name"]))
-            resources = game_state.get("resources", {}) or {}
+            resources = state.get("resources", {}) or {}
             for key in ("hands", "discards", "money"):
                 if resources.get(key) is not None:
                     parts.append(f"{key} {resources[key]}")
@@ -311,9 +323,10 @@ class BalatroCoach:
         self,
         user_message: str,
         game_state: dict | None,
+        additional_game_states: list[dict],
         rag_context: str,
         hand_eval_note: str,
-        image_bytes: bytes | None,
+        image_bytes_list: list[bytes],
         allow_image: bool,
         cv_failure_reason: str | None,
     ) -> list[dict]:
@@ -327,20 +340,31 @@ class BalatroCoach:
                     "text": f"**Current game state (extracted from screenshot):**\n```json\n{state_text}\n```\n",
                 }
             )
+        if additional_game_states:
+            extra_state_text = json.dumps(additional_game_states, indent=2)
+            user_content.append(
+                {
+                    "type": "text",
+                    "text": f"**Additional screenshot state(s):**\n```json\n{extra_state_text}\n```\n",
+                }
+            )
         if rag_context:
             user_content.append({"type": "text", "text": f"**Relevant game knowledge:**\n{rag_context}\n"})
         if hand_eval_note:
             user_content.append({"type": "text", "text": f"{hand_eval_note}\n"})
-        if image_bytes and allow_image:
-            b64 = base64.standard_b64encode(image_bytes).decode()
-            user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+        if image_bytes_list and allow_image:
+            for image_bytes in image_bytes_list:
+                b64 = base64.standard_b64encode(image_bytes).decode()
+                user_content.append(
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
+                )
             user_content.append(
                 {
                     "type": "text",
-                    "text": "(Screenshot attached for reference – please read the game state directly from the image.)",
+                    "text": "(Screenshot set attached for reference – please read the game state directly from the image set.)",
                 }
             )
-        elif image_bytes and not game_state:
+        elif image_bytes_list and not game_state:
             reason = ""
             if cv_failure_reason:
                 reason = f" CV failure: {cv_failure_reason.strip().replace(chr(10), ' ')[:240]}."

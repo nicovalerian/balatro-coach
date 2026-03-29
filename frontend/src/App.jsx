@@ -1,92 +1,149 @@
 import { useEffect, useRef, useState } from "react";
-import { Menu, RotateCcw, Send, Sparkles } from "lucide-react";
+import { Club, Diamond, Heart, Menu, RotateCcw, Send, Spade } from "lucide-react";
 import { useChat } from "./hooks/useChat";
 import ChatMessage from "./components/ChatMessage";
 import GameStateCard from "./components/GameStateCard";
 import ImageUploader from "./components/ImageUploader";
-import ThemeToggle from "./components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
-  SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-const SUGGESTED_PROMPTS = [
-  "What should I play next?",
-  "What's the best buy in the shop?",
+const QUICK_PROMPTS = [
+  "How do I arrange my jokers here?",
+  "Analyze the highest score I can get here.",
+  "What's the best buy in this shop?",
   "Can this line survive the next blind?",
-  "How do my jokers synergise?",
-  "What hand type should I build toward?",
 ];
 
-function SidebarPanel({ gameState, messages, clearChat, onPrompt }) {
+const COACH_PRIORITIES = [
+  {
+    label: "Blind First",
+    detail: "Beat the next score check before chasing greedier scaling.",
+  },
+  {
+    label: "Economy Tempo",
+    detail: "Protect money and rerolls whenever the board gives you room.",
+  },
+  {
+    label: "Joker Order",
+    detail: "Left-to-right sequencing matters more than flashy rarity.",
+  },
+];
+
+const STARTER_MESSAGES = [
+  {
+    id: "starter-1",
+    role: "assistant",
+    content:
+      "Upload up to **3 screenshots** from your blind, hand, or shop and ask what to do next. I'll help with score math, joker order, shop buys, and survival lines.",
+  },
+  {
+    id: "starter-2",
+    role: "user",
+    content: "What kind of coaching can you give me?",
+  },
+  {
+    id: "starter-3",
+    role: "assistant",
+    content:
+      "**Recommended use:** ask one concrete question at a time.\n\n- Blind survival and best line this hand\n- Joker order and scoring sequence\n- Shop buys, sells, rerolls, and economy\n- Highest score line from the current board",
+  },
+];
+
+const EMPTY_GAME_STATE = {
+  screen_type: "waiting",
+  confidence: null,
+  low_confidence: false,
+  resources: {},
+  sidebar: {
+    reminders: [
+      "No screenshot analyzed yet.",
+      "Upload a blind, hand, or shop view to refresh this panel.",
+      "Ask one tactical question at a time.",
+    ],
+    synergy_targets: [
+      "Retriggers for played cards",
+      "Right-side xMult finishers",
+      "Economy jokers that fund rerolls",
+    ],
+    hand_settings: [
+      { name: "Flush Five", level: 1, chips: 160, mult: 16 },
+      { name: "Flush House", level: 1, chips: 140, mult: 14 },
+      { name: "Five of a Kind", level: 1, chips: 120, mult: 12 },
+      { name: "Straight Flush", level: 1, chips: 100, mult: 8 },
+      { name: "Four of a Kind", level: 1, chips: 60, mult: 7 },
+      { name: "Full House", level: 1, chips: 40, mult: 4 },
+      { name: "Flush", level: 1, chips: 35, mult: 4 },
+      { name: "Straight", level: 1, chips: 30, mult: 4 },
+      { name: "Three of a Kind", level: 1, chips: 30, mult: 3 },
+      { name: "Two Pair", level: 1, chips: 20, mult: 2 },
+      { name: "Pair", level: 1, chips: 10, mult: 2 },
+      { name: "High Card", level: 1, chips: 5, mult: 1 },
+    ],
+  },
+};
+
+function PromptButton({ prompt, onClick }) {
   return (
-    <div className="flex h-full flex-col gap-4 p-4">
-      <div className="rounded-xl border border-border/80 bg-card/80 p-4">
-        <p className="text-xs text-muted-foreground">
-          Upload a screenshot or describe your state for coaching on blinds, shop decisions, and joker order.
+    <Button
+      type="button"
+      variant="ghost"
+      className="action-button action-button-ghost min-h-[44px] justify-start px-4 py-3 text-left"
+      onClick={() => onClick(prompt)}
+    >
+      <span className="terminal-copy text-[13px] leading-5 text-inherit">{prompt}</span>
+    </Button>
+  );
+}
+
+function SidebarPanel({ gameState }) {
+  return (
+    <div className="flex h-full flex-col p-4 sm:p-5">
+      <section className="terminal-panel flex min-h-0 flex-1 flex-col p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="panel-label text-primary">Game State / Run Brief</p>
+          {(gameState ?? EMPTY_GAME_STATE)?.screen_type ? (
+            <span className="status-pill">
+              <span className="status-light" />
+              <span className="pixel-font text-[11px] text-white">
+                {(gameState ?? EMPTY_GAME_STATE).screen_type}
+              </span>
+            </span>
+          ) : null}
+        </div>
+        <p className="terminal-copy mt-3 text-[12px] leading-6 text-[#c7d0cb]">
+          Quick reminders, synergy targets, and hand values update here as screenshots are analyzed.
         </p>
-      </div>
-
-      <Card className="bg-card/80">
-        <CardHeader className="pb-2">
-          <CardTitle className="brand-title text-sm">Game State</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {gameState ? (
-            <GameStateCard state={gameState} />
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              No game state extracted yet. Upload a screenshot to populate this panel.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card/80">
-        <CardHeader className="pb-2">
-          <CardTitle className="brand-title text-sm">Quick Prompts</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {SUGGESTED_PROMPTS.map((prompt) => (
-            <Button
-              key={prompt}
-              variant="ghost"
-              className="h-auto justify-start whitespace-normal text-left text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => onPrompt(prompt)}
-            >
-              {prompt}
-            </Button>
-          ))}
-        </CardContent>
-      </Card>
-
-      <div className="mt-auto">
-        {messages.length > 0 && (
-          <Button variant="outline" className="w-full" onClick={clearChat}>
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Clear conversation
-          </Button>
-        )}
-      </div>
+        <div className="mt-4 min-h-0 flex-1 overflow-hidden">
+          <GameStateCard state={gameState ?? EMPTY_GAME_STATE} />
+        </div>
+      </section>
     </div>
+  );
+}
+
+function EmptyChatState() {
+  return (
+    <section className="space-y-3 pb-2">
+      {STARTER_MESSAGES.map((message) => (
+        <ChatMessage key={message.id} role={message.role} content={message.content} />
+      ))}
+    </section>
   );
 }
 
 export default function App() {
   const { messages, gameState, isLoading, sendMessage, clearChat } = useChat();
   const [input, setInput] = useState("");
-  const [imageFile, setImageFile] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -94,167 +151,222 @@ export default function App() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
-    const text = input.trim();
-    if (!text && !imageFile) return;
-    sendMessage(text || "(screenshot uploaded - please analyse my game state)", imageFile);
-    setInput("");
-    setImageFile(null);
+  const handlePrompt = (prompt) => {
+    setInput(prompt);
+    textareaRef.current?.focus();
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text && imageFiles.length === 0) return;
+
+    sendMessage(
+      text || "(screenshots uploaded - please analyse my game state)",
+      imageFiles
+    );
+    setInput("");
+    setImageFiles([]);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
       handleSend();
     }
   };
 
   const isEmpty = messages.length === 0;
+  const coachStatus = isLoading ? "Coach Thinking" : "Coach Online";
 
   return (
-    <div className="relative flex h-full bg-background text-foreground">
-      <aside className="hidden h-full w-80 shrink-0 border-r border-border/70 bg-muted/20 lg:block">
-        <SidebarPanel
-          gameState={gameState}
-          messages={messages}
-          clearChat={clearChat}
-          onPrompt={(prompt) => {
-            setInput(prompt);
-            textareaRef.current?.focus();
-          }}
-        />
-      </aside>
+    <div className="relative h-[100dvh] overflow-hidden text-foreground">
+      <div className="pointer-events-none absolute inset-0 suit-pattern" />
+      <div className="pointer-events-none absolute inset-0 scanline-overlay" />
+      <div className="pointer-events-none absolute inset-0 vignette-overlay" />
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-border/70 bg-background/90 px-4 py-3 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="icon-sm" className="lg:hidden">
-                    <Menu className="h-4 w-4" />
+      <div className="relative flex h-full xl:gap-6 xl:p-5">
+        <aside
+          className={cn(
+            "hidden xl:block xl:h-full xl:shrink-0 xl:transition-all xl:duration-200",
+            sidebarVisible ? "xl:w-[320px]" : "xl:w-0 xl:overflow-hidden"
+          )}
+        >
+          {sidebarVisible ? (
+            <div className="terminal-shell h-full overflow-hidden">
+              <SidebarPanel gameState={gameState} />
+            </div>
+          ) : null}
+        </aside>
+
+        <main className="terminal-shell flex min-w-0 flex-1 flex-col overflow-hidden xl:h-full">
+          <header className="border-b border-white/10 bg-black/25 px-4 py-4 sm:px-6">
+            <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between gap-4 xl:max-w-none">
+              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                  <SheetTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="action-button action-button-ghost xl:hidden"
+                    >
+                      <Menu className="h-4 w-4" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent
+                    side="left"
+                    className="mobile-sheet w-[92vw] max-w-[360px] p-0"
+                  >
+                    <SidebarPanel gameState={gameState} />
+                  </SheetContent>
+                </Sheet>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="action-button action-button-ghost hidden min-h-[44px] px-4 xl:inline-flex"
+                  onClick={() => setSidebarVisible((value) => !value)}
+                >
+                  <Menu className="mr-2 h-4 w-4" />
+                  {sidebarVisible ? "Hide Sidebar" : "Show Sidebar"}
+                </Button>
+
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border-2 border-white/15 bg-[#0f1316]/85 shadow-[4px_4px_0_rgba(0,0,0,0.55)]">
+                  <div className="grid grid-cols-2 gap-1 text-primary">
+                    <Spade className="h-3.5 w-3.5" />
+                    <Heart className="h-3.5 w-3.5 text-[#e43f3f]" />
+                    <Club className="h-3.5 w-3.5 text-[#8af7c8]" />
+                    <Diamond className="h-3.5 w-3.5 text-[#3498db]" />
+                  </div>
+                </div>
+
+                <div className="min-w-0">
+                  <p className="pixel-font truncate text-[28px] text-primary sm:text-[32px]">
+                    Balatro Coach
+                  </p>
+                  <p className="terminal-copy mt-1 max-w-2xl text-[12px] text-[#d0d7d2]">
+                    Coaching for blind survival, shop choices, score math, and joker order.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <span className={cn("status-pill", isLoading && "status-live")}>
+                  <span className="status-light" />
+                  <span className="pixel-font text-[11px] text-white sm:text-[12px]">
+                    {coachStatus}
+                  </span>
+                </span>
+
+                {messages.length > 0 ? (
+                  <Button
+                    type="button"
+                    className="action-button action-button-danger hidden min-h-[44px] px-4 sm:inline-flex"
+                    onClick={clearChat}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Clear Chat
                   </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-[90vw] max-w-sm p-0">
-                  <SheetHeader className="border-b border-border/70 p-4">
-                    <SheetTitle className="brand-title text-sm">Balatro Coach</SheetTitle>
-                  </SheetHeader>
-                  <SidebarPanel
-                    gameState={gameState}
-                    messages={messages}
-                    clearChat={clearChat}
-                    onPrompt={(prompt) => {
-                      setInput(prompt);
-                      setSidebarOpen(false);
-                    }}
-                  />
-                </SheetContent>
-              </Sheet>
-              <div>
-                <p className="brand-title text-sm text-foreground">Balatro Coach</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Tactical guidance with screenshot + context memory
-                </p>
+                ) : null}
               </div>
             </div>
+          </header>
 
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-[10px]",
-                  isLoading ? "border-accent/50 text-accent" : "border-border text-muted-foreground"
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ScrollArea className="min-h-0 flex-1 px-3 py-3 sm:px-5 lg:px-8 lg:py-4">
+              <div className="mx-auto w-full max-w-[980px]">
+                {isEmpty ? (
+                  <EmptyChatState />
+                ) : (
+                  <div className="space-y-4 pb-4">
+                    {messages.map((message, index) => (
+                      <div
+                        key={message.id}
+                        className="message-enter"
+                        style={{ animationDelay: `${index * 0.04}s` }}
+                      >
+                        <ChatMessage
+                          role={message.role}
+                          content={message.content}
+                          streaming={message.streaming}
+                          imagePreviews={message.imagePreviews}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 )}
-              >
-                {isLoading ? "Analyzing..." : "Ready"}
-              </Badge>
-              <ThemeToggle />
-            </div>
-          </div>
-        </header>
+                <div ref={bottomRef} />
+              </div>
+            </ScrollArea>
 
-        <div className="flex min-h-0 flex-1">
-          <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-1 flex-col">
-            <ScrollArea className="min-h-0 flex-1 px-4 py-4 md:px-6">
-              {isEmpty ? (
-                <section className="mx-auto mt-8 max-w-3xl">
-                  <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card/80 p-6 md:p-8">
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/15 via-secondary/10 to-accent/10" />
-                    <div className="relative space-y-4">
-                      <Badge className="bg-accent/20 text-accent hover:bg-accent/25">Coach Console</Badge>
-                      <h1 className="brand-title text-2xl leading-tight md:text-3xl">
-                        Plan your line, survive the blind, scale the run.
-                      </h1>
-                      <p className="max-w-2xl text-sm text-muted-foreground">
-                        Send a screenshot or describe your hand. I’ll break down blind pressure, score math, joker order, and shop decisions.
+            <div className="border-t border-white/10 bg-gradient-to-t from-black/35 to-transparent px-3 pb-3 pt-3 sm:px-5 lg:px-8 lg:pb-5">
+              <div className="mx-auto max-w-[980px]">
+                <div className="composer-shell p-3 sm:p-4">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="pixel-font text-[16px] text-primary">Question</p>
+                        <p className="terminal-copy mt-1 text-[12px] text-[#d0d8d3]">
+                          Type what you want analyzed, then add screenshots if needed.
+                        </p>
+                      </div>
+                      {imageFiles.length > 0 ? (
+                        <span className="status-pill">
+                          <span className="status-light" />
+                          <span className="pixel-font text-[11px] text-white">
+                            {imageFiles.length} screenshot{imageFiles.length > 1 ? "s" : ""}
+                          </span>
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="question-shell p-3">
+                      <Textarea
+                        ref={textareaRef}
+                        value={input}
+                        onChange={(event) => setInput(event.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Ask for the best line, highest score, joker order, or shop decision..."
+                        rows={3}
+                        disabled={isLoading}
+                        className="terminal-textarea text-[14px] leading-6"
+                      />
+                    </div>
+
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                      <ImageUploader
+                        files={imageFiles}
+                        onFilesChange={setImageFiles}
+                        disabled={isLoading}
+                      />
+                      <Button
+                        type="button"
+                        className="action-button action-button-primary min-h-[56px] min-w-[132px] px-5"
+                        onClick={handleSend}
+                        disabled={isLoading || (!input.trim() && imageFiles.length === 0)}
+                      >
+                        <Send className="mr-2 h-4 w-4" />
+                        {isLoading ? "Sending" : "Send"}
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="terminal-copy text-[11px] text-[#a6b1aa]">
+                        Enter to send. Shift+Enter for newline. Paste screenshots with Ctrl+V.
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {SUGGESTED_PROMPTS.slice(0, 3).map((prompt) => (
-                          <Button
-                            key={prompt}
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              setInput(prompt);
-                              textareaRef.current?.focus();
-                            }}
-                          >
-                            <Sparkles className="mr-1.5 h-3 w-3" />
-                            {prompt}
-                          </Button>
-                        ))}
+                      {QUICK_PROMPTS.map((prompt) => (
+                        <PromptButton key={prompt} prompt={prompt} onClick={handlePrompt} />
+                      ))}
                       </div>
                     </div>
                   </div>
-                </section>
-              ) : (
-                <div className="space-y-1">
-                  {messages.map((msg) => (
-                    <ChatMessage
-                      key={msg.id}
-                      role={msg.role}
-                      content={msg.content}
-                      streaming={msg.streaming}
-                      imagePreview={msg.imagePreview}
-                    />
-                  ))}
                 </div>
-              )}
-              <div ref={bottomRef} />
-            </ScrollArea>
-
-            <div className="border-t border-border/70 px-4 py-3 md:px-6">
-              <div className="mx-auto w-full max-w-4xl space-y-3">
-                <ImageUploader onFile={setImageFile} disabled={isLoading} />
-                <Separator />
-                <div className="flex items-end gap-2">
-                  <Textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Ask for coaching or upload a screenshot..."
-                    rows={2}
-                    disabled={isLoading}
-                    className="min-h-[72px]"
-                  />
-                  <Button
-                    className="h-11 min-w-[88px]"
-                    onClick={handleSend}
-                    disabled={isLoading || (!input.trim() && !imageFile)}
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-                    {isLoading ? "Sending" : "Send"}
-                  </Button>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Enter to send, Shift+Enter for newline, Ctrl+V to paste screenshot.
-                </p>
               </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

@@ -32,6 +32,7 @@ _detector = None
 _extractor = None
 _retriever = None
 _coach = None
+MAX_CHAT_IMAGES = 3
 
 
 def _parse_history(raw_history: str | None) -> list[dict[str, str]]:
@@ -81,6 +82,169 @@ def _format_stream_error(exc: Exception) -> str:
     if isinstance(exc, APIError):
         return "Model provider returned an API error. Please retry shortly."
     return f"Coaching request failed: {msg}"
+
+
+async def _read_image_uploads(
+    uploads: list[UploadFile] | None,
+    *,
+    max_files: int,
+) -> list[dict[str, object]]:
+    items = [upload for upload in (uploads or []) if upload is not None]
+    if len(items) > max_files:
+        raise HTTPException(400, f"Up to {max_files} screenshots are allowed per request.")
+
+    parsed: list[dict[str, object]] = []
+    for upload in items:
+        if upload.content_type and not upload.content_type.startswith("image/"):
+            raise HTTPException(400, "Only image uploads are supported.")
+
+        data = await upload.read()
+        if not data:
+            raise HTTPException(400, "Uploaded image was empty.")
+
+        try:
+            image = Image.open(io.BytesIO(data)).convert("RGB")
+        except Exception as exc:
+            raise HTTPException(400, f"Invalid image file: {upload.filename or 'upload'}") from exc
+
+        parsed.append({"bytes": data, "image": image, "filename": upload.filename or "upload"})
+
+    return parsed
+
+
+def _pick_primary_state(states: list[dict]) -> tuple[dict | None, list[dict]]:
+    if not states:
+        return None, []
+
+    def confidence_value(item: dict) -> float:
+        confidence = item.get("confidence")
+        if isinstance(confidence, (int, float)):
+            return float(confidence)
+        return 0.0
+
+    best_index = max(range(len(states)), key=lambda index: confidence_value(states[index]))
+    primary = states[best_index]
+    remaining = [state for index, state in enumerate(states) if index != best_index]
+    return primary, remaining
+
+
+def _build_hand_settings() -> list[dict[str, int | str]]:
+    from .llm.hand_eval import HAND_BASE, HAND_PRIORITY
+
+    ordered_names = sorted(
+        [name for name in HAND_BASE.keys() if name != "Royal Flush"],
+        key=lambda name: HAND_PRIORITY[name],
+        reverse=True,
+    )
+    return [
+        {
+            "name": name,
+            "level": 1,
+            "chips": HAND_BASE[name][0],
+            "mult": HAND_BASE[name][1],
+        }
+        for name in ordered_names
+    ]
+
+
+def _build_run_brief(state: dict | None) -> dict[str, list[str]]:
+    if not state:
+        return {
+            "reminders": [
+                "Upload a screenshot to refresh this panel.",
+                "Ask one tactical question at a time.",
+                "Prioritize the next blind before greedier scaling.",
+            ],
+            "synergy_targets": [
+                "Retriggers for played cards",
+                "Right-side xMult finishers",
+                "Economy jokers that fund rerolls",
+            ],
+        }
+
+    reminders: list[str] = []
+    synergy_targets: list[str] = []
+
+    score = state.get("score", {}) or {}
+    blind = state.get("blind", {}) or {}
+    current_score = score.get("current")
+    blind_target = blind.get("target")
+    if isinstance(current_score, int) and isinstance(blind_target, int):
+        gap = blind_target - current_score
+        if gap > 0:
+            reminders.append(f"Need {gap:,} more chips to clear the shown blind.")
+        else:
+            reminders.append("Current score already covers the shown blind.")
+
+    resources = state.get("resources", {}) or {}
+    hands = resources.get("hands")
+    discards = resources.get("discards")
+    if hands is not None or discards is not None:
+        reminders.append(
+            f"{hands if hands is not None else '?'} hands and {discards if discards is not None else '?'} discards remain."
+        )
+
+    money = resources.get("money")
+    if isinstance(money, int):
+        if money >= 25:
+            reminders.append("Interest cap is live. Spend only if it clearly improves the run.")
+        elif money >= 20:
+            reminders.append("One clean shop can push you to max interest.")
+        else:
+            reminders.append("Economy is still fragile. Avoid rerolls unless the blind demands it.")
+
+    joker_names = [
+        (joker.get("name") or "").strip()
+        for joker in state.get("jokers", [])
+        if isinstance(joker, dict)
+    ]
+    joker_names = [name for name in joker_names if name]
+    joker_text = " ".join(name.lower() for name in joker_names)
+
+    if joker_names:
+        reminders.append(f"Current jokers: {', '.join(joker_names[:4])}.")
+
+    if any(token in joker_text for token in ("blueprint", "brainstorm", "mime", "baron")):
+        synergy_targets.append("Look for the strongest scorer you can copy or retrigger.")
+    if any(token in joker_text for token in ("sock", "buskin", "photograph", "scary face", "smiley")):
+        synergy_targets.append("Face-card payoff is live. Retriggers and face support go up in value.")
+    if any(token in joker_text for token in ("arrowhead", "bloodstone", "onyx", "idol", "ancient")):
+        synergy_targets.append("Suit-fixing cards and deck smoothing fit this joker package.")
+    if any(token in joker_text for token in ("fibonacci", "hack", "wee", "walkie", "odd todd", "even steven")):
+        synergy_targets.append("Rank-focused support and retriggers fit the current shell.")
+    if any(token in joker_text for token in ("bull", "bootstraps", "rocket", "cloud 9", "delayed gratification")):
+        synergy_targets.append("Economy scaling matters here. Prioritize money-preserving lines.")
+
+    hand = state.get("hand", []) or []
+    suits = [card.get("suit") for card in hand if isinstance(card, dict)]
+    if len(suits) >= 4 and len(set(suits)) <= 2:
+        synergy_targets.append("Your hand already leans toward suit concentration. Flush support is more live.")
+
+    defaults = [
+        "Retriggers for scored cards",
+        "Right-side xMult finishers",
+        "Economy jokers that fund better shops",
+    ]
+    for item in defaults:
+        if item not in synergy_targets:
+            synergy_targets.append(item)
+
+    return {
+        "reminders": reminders[:4],
+        "synergy_targets": synergy_targets[:3],
+    }
+
+
+def _decorate_game_state(state: dict | None) -> dict | None:
+    if not state:
+        return None
+
+    decorated = dict(state)
+    decorated["sidebar"] = {
+        **_build_run_brief(state),
+        "hand_settings": _build_hand_settings(),
+    }
+    return decorated
 
 
 def _get_detector():
@@ -157,11 +321,8 @@ async def health():
 @app.post("/api/analyze")
 async def analyze_screenshot(file: UploadFile = File(...)):
     """CV only: returns game state JSON for debugging / display."""
-    data = await file.read()
-    try:
-        image = Image.open(io.BytesIO(data)).convert("RGB")
-    except Exception:
-        raise HTTPException(400, "Invalid image file")
+    uploads = await _read_image_uploads([file], max_files=1)
+    image = uploads[0]["image"]
 
     try:
         state = _get_extractor().extract(image)
@@ -176,30 +337,43 @@ async def analyze_screenshot(file: UploadFile = File(...)):
 async def chat(
     message: str = Form(...),
     history: str | None = Form(default=None),
-    file: UploadFile | None = File(default=None),
+    files: list[UploadFile] | None = File(default=None),
 ):
     """
     Full coaching pipeline. Returns SSE stream of text chunks.
     Accepts optional screenshot upload alongside the text message.
     """
-    image_bytes: bytes | None = None
+    image_bytes_list: list[bytes] = []
     game_state: dict | None = None
+    additional_game_states: list[dict] = []
     low_confidence = False
     cv_failure_reason: str | None = None
     chat_history = _parse_history(history)
 
-    if file:
-        image_bytes = await file.read()
-        try:
-            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-            state = _get_extractor().extract(image)
-            game_state = state.to_dict()
-            low_confidence = state.low_confidence
-        except Exception as e:
-            logger.warning("CV failed, will use vision fallback: %s", e)
-            # No game_state → coach will use raw image as fallback
-            game_state = None
-            cv_failure_reason = str(e)
+    uploads = await _read_image_uploads(files, max_files=MAX_CHAT_IMAGES)
+    image_bytes_list = [item["bytes"] for item in uploads]
+
+    if uploads:
+        extracted_states: list[dict] = []
+        cv_errors: list[str] = []
+        for item in uploads:
+            try:
+                state = _get_extractor().extract(item["image"])
+                extracted_states.append(state.to_dict())
+            except Exception as exc:
+                logger.warning("CV failed for %s, will keep upload for vision fallback: %s", item["filename"], exc)
+                cv_errors.append(f"{item['filename']}: {exc}")
+
+        game_state, additional_game_states = _pick_primary_state(extracted_states)
+        game_state = _decorate_game_state(game_state)
+        additional_game_states = [
+            decorated
+            for decorated in (_decorate_game_state(state) for state in additional_game_states)
+            if decorated is not None
+        ]
+        low_confidence = bool(game_state and game_state.get("low_confidence"))
+        if not game_state and cv_errors:
+            cv_failure_reason = " | ".join(cv_errors[:3])
 
     async def event_stream() -> AsyncIterator[str]:
         # First: send game_state so UI can render it
@@ -211,7 +385,8 @@ async def chat(
             message,
             chat_history,
             game_state,
-            image_bytes,
+            additional_game_states,
+            image_bytes_list,
             low_confidence,
             cv_failure_reason,
         ):
@@ -234,7 +409,8 @@ async def _stream_coach(
     message: str,
     history: list[dict[str, str]],
     game_state: dict | None,
-    image_bytes: bytes | None,
+    additional_game_states: list[dict],
+    image_bytes_list: list[bytes],
     low_confidence: bool,
     cv_failure_reason: str | None,
 ) -> AsyncIterator[dict]:
@@ -249,7 +425,8 @@ async def _stream_coach(
             message,
             history=history,
             game_state=game_state,
-            image_bytes=image_bytes,
+            additional_game_states=additional_game_states,
+            image_bytes_list=image_bytes_list,
             low_confidence=low_confidence,
             cv_failure_reason=cv_failure_reason,
         )
