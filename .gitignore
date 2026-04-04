@@ -32,3 +32,11 @@ frontend/.vite/
 # OS
 .DS_Store
 Thumbs.db
+
+# AI tooling (not for public repo)
+.claude/
+.ai-codex/
+frontend/.ai-codex/
+CLAUDE.md
+docs/superpowers/
+codex.config.json
