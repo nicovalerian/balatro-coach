@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     retrieval_top_k: int = 6  # 3 card-level + 3 guide-level
 
     # LLM
-    max_output_tokens: int = 1024
+    max_output_tokens: int = 2048
     chat_history_max_turns: int = 12
     vision_models: str = ""
     stream: bool = True

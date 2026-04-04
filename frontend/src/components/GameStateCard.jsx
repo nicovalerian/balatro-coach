@@ -46,8 +46,8 @@ export default function GameStateCard({ state, handSettings, updateHandSetting }
   const reminders = sidebar.reminders ?? [];
   const synergyTargets = sidebar.synergy_targets ?? [];
   const [openSections, setOpenSections] = useState({
-    brief: true,
-    jokers: true,
+    brief: false,
+    jokers: false,
     hands: true,
   });
 
@@ -229,17 +229,17 @@ function HandRow({ hand, onLevelChange, onTimesPlayedChange }) {
           />
           <span className="pixel-font text-[9px] text-[#6a8070]">×</span>
         </div>
+      </div>
 
-        {/* Chips × Mult (read-only) */}
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          <span className="pixel-font rounded-full bg-[#009dff] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
-            {stats.chips}
-          </span>
-          <span className="pixel-font text-[9px] text-[#6a8070]">×</span>
-          <span className="pixel-font rounded-full bg-[#FE5F55] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
-            {stats.mult}
-          </span>
-        </div>
+      {/* Chips × Mult — own line so it never overflows at any sidebar width */}
+      <div className="mt-1.5 flex items-center gap-1">
+        <span className="pixel-font rounded-full bg-[#009dff] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
+          {stats.chips}
+        </span>
+        <span className="pixel-font text-[9px] text-[#6a8070]">×</span>
+        <span className="pixel-font rounded-full bg-[#FE5F55] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
+          {stats.mult}
+        </span>
       </div>
     </div>
   );

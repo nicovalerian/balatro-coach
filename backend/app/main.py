@@ -465,23 +465,26 @@ async def _stream_coach(
 
     def _run():
         import asyncio as _asyncio
-        gen = coach.stream_response(
-            message,
-            history=history,
-            game_state=game_state,
-            additional_game_states=additional_game_states,
-            image_bytes_list=image_bytes_list,
-            low_confidence=low_confidence,
-            cv_failure_reason=cv_failure_reason,
-            hand_settings=hand_settings,
-        )
-        # coach.stream_response is an async generator – run it synchronously
+        # new_loop created before try so finally can always close it
         new_loop = _asyncio.new_event_loop()
         try:
+            # gen creation is inside try so any initialisation error is caught
+            gen = coach.stream_response(
+                message,
+                history=history,
+                game_state=game_state,
+                additional_game_states=additional_game_states,
+                image_bytes_list=image_bytes_list,
+                low_confidence=low_confidence,
+                cv_failure_reason=cv_failure_reason,
+                hand_settings=hand_settings,
+            )
+
             async def _collect():
                 async for chunk in gen:
                     loop.call_soon_threadsafe(queue.put_nowait, {"type": "text", "data": chunk})
                 loop.call_soon_threadsafe(queue.put_nowait, None)
+
             new_loop.run_until_complete(_collect())
         except Exception as exc:
             logger.warning("Coach stream failed: %s", exc)
@@ -498,7 +501,12 @@ async def _stream_coach(
     loop.run_in_executor(executor, _run)
 
     while True:
-        event = await queue.get()
+        try:
+            event = await asyncio.wait_for(queue.get(), timeout=120.0)
+        except asyncio.TimeoutError:
+            logger.warning("Coach stream timed out waiting for next chunk")
+            yield {"type": "error", "data": "Response timed out. Please try again."}
+            break
         if event is None:
             break
         yield event

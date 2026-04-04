@@ -3,6 +3,31 @@ import remarkGfm from "remark-gfm";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const SUIT_COLORS = {
+  "♥": "#e43f3f",
+  "♦": "#ff8f00",
+  "♣": "#4ade80",
+  "♠": "#8ac9ff",
+};
+
+function colorSuits(children) {
+  if (typeof children !== "string") return children;
+  const parts = children.split(/(♥|♦|♣|♠)/);
+  if (parts.length === 1) return children;
+  return parts.map((part, i) =>
+    SUIT_COLORS[part]
+      ? <span key={i} style={{ color: SUIT_COLORS[part], fontWeight: 700 }}>{part}</span>
+      : part
+  );
+}
+
+function applyToChildren(children) {
+  if (Array.isArray(children)) return children.map((c, i) =>
+    typeof c === "string" ? <span key={i}>{colorSuits(c)}</span> : c
+  );
+  return colorSuits(children);
+}
+
 export default function ChatMessage({
   role,
   content,
@@ -88,12 +113,15 @@ export default function ChatMessage({
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
-                  p: ({ children }) => <p className="mb-3">{children}</p>,
+                  p: ({ children }) => <p className="mb-3">{applyToChildren(children)}</p>,
                   ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5">{children}</ul>,
                   ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5">{children}</ol>,
-                  li: ({ children }) => <li>{children}</li>,
+                  li: ({ children }) => <li>{applyToChildren(children)}</li>,
                   strong: ({ children }) => (
-                    <strong className="font-semibold text-[#f2c237]">{children}</strong>
+                    <strong className="font-semibold text-[#f2c237]">{applyToChildren(children)}</strong>
+                  ),
+                  em: ({ children }) => (
+                    <em className="not-italic text-[#8ac9ff]">{applyToChildren(children)}</em>
                   ),
                   a: ({ children, href }) => (
                     <a
@@ -119,10 +147,10 @@ export default function ChatMessage({
                     <h1 className="pixel-font mb-3 text-[18px] text-[#f2c237]">{children}</h1>
                   ),
                   h2: ({ children }) => (
-                    <h2 className="pixel-font mb-3 text-[16px] text-[#f2c237]">{children}</h2>
+                    <h2 className="pixel-font mb-3 text-[16px] text-[#4ade80]">{children}</h2>
                   ),
                   h3: ({ children }) => (
-                    <h3 className="pixel-font mb-2 text-[14px] text-[#f2c237]">{children}</h3>
+                    <h3 className="pixel-font mb-2 text-[14px] text-[#8ac9ff]">{children}</h3>
                   ),
                   blockquote: ({ children }) => (
                     <blockquote className="mb-3 border-l-2 border-[#3498db] pl-4 text-[#dceeff]">
@@ -145,7 +173,7 @@ export default function ChatMessage({
                     <th className="px-3 py-1.5 text-left font-semibold text-[#f2c237]">{children}</th>
                   ),
                   td: ({ children }) => (
-                    <td className="px-3 py-1.5 text-[#dce3de]">{children}</td>
+                    <td className="px-3 py-1.5 text-[#dce3de]">{applyToChildren(children)}</td>
                   ),
                 }}
               >

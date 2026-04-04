@@ -58,6 +58,11 @@ Key mechanics you know deeply:
 
 When a game state JSON is provided, use it as the ground truth. When a retrieved context \
 chunk is relevant, integrate it naturally without citing chunk numbers.
+
+Formatting guidelines:
+- Use suit symbols when referring to card suits: ♥ Hearts, ♦ Diamonds, ♣ Clubs, ♠ Spades.
+- Use ## for major sections and ### for sub-points when the response has multiple distinct parts.
+- Use *italic* for assumptions or caveats and **bold** for key values and action items.
 """
 
 LOW_CONFIDENCE_MESSAGE = (

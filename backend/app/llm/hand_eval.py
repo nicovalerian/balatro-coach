@@ -182,12 +182,11 @@ def build_hand_eval_summary_from_text(
 
     played_cards = ", ".join(_format_card(c) for c in best.played_cards)
     level = (level_overrides or {}).get(best.hand_name, 1)
-    level_note = f" (Lvl {level})" if level > 1 else ""
+    level_note = f" *(Lvl {level})*" if level > 1 else ""
     return (
-        "Deterministic base-hand check: "
-        f"{best.hand_name}{level_note} with {played_cards} -> "
-        f"({best.hand_chips} + {best.card_chips}) x {best.hand_mult} = {best.base_total} "
-        "(before jokers/editions)."
+        f"> **Best hand:** {best.hand_name}{level_note} — {played_cards}\n"
+        f"> **Base score:** ({best.hand_chips} + {best.card_chips}) × {best.hand_mult}"
+        f" = **{best.base_total}** *(before jokers)*"
     )
 
 
@@ -338,12 +337,10 @@ def _is_royal(cards: tuple[ParsedCard, ...]) -> bool:
     return {RANK_TO_STRAIGHT_VALUE[c.rank] for c in cards} == required
 
 
+_SUIT_SYMBOLS = {"Spades": "♠", "Hearts": "♥", "Diamonds": "♦", "Clubs": "♣"}
+
+
 def _format_card(card: ParsedCard) -> str:
-    suit_letter = {
-        "Spades": "S",
-        "Hearts": "H",
-        "Diamonds": "D",
-        "Clubs": "C",
-    }.get(card.suit, card.suit[:1].upper())
-    return f"{card.rank}{suit_letter}"
+    sym = _SUIT_SYMBOLS.get(card.suit, card.suit[:1].upper())
+    return f"{card.rank}{sym}"
 
