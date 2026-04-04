@@ -129,7 +129,7 @@ def _pick_primary_state(states: list[dict]) -> tuple[dict | None, list[dict]]:
 
 
 def _build_hand_settings() -> list[dict[str, int | str]]:
-    from .llm.hand_eval import HAND_BASE, HAND_PRIORITY
+    from .llm.hand_eval import HAND_BASE, HAND_PRIORITY, compute_hand_stats
 
     ordered_names = sorted(
         [name for name in HAND_BASE.keys() if name != "Royal Flush"],
@@ -140,11 +140,50 @@ def _build_hand_settings() -> list[dict[str, int | str]]:
         {
             "name": name,
             "level": 1,
-            "chips": HAND_BASE[name][0],
-            "mult": HAND_BASE[name][1],
+            "times_played": 0,
+            "chips": compute_hand_stats(name, 1)[0],
+            "mult": compute_hand_stats(name, 1)[1],
         }
         for name in ordered_names
     ]
+
+
+def _parse_hand_settings(raw: str | None) -> list[dict] | None:
+    """Parse and validate a JSON hand_settings form field from the client."""
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Invalid hand_settings payload: not valid JSON")
+        return None
+    if not isinstance(payload, list):
+        return None
+
+    from .llm.hand_eval import HAND_BASE, compute_hand_stats
+
+    validated: list[dict] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        level = item.get("level")
+        times_played = item.get("times_played")
+        if not isinstance(name, str) or name not in HAND_BASE:
+            continue
+        if not isinstance(level, int) or level < 1:
+            continue
+        if not isinstance(times_played, int) or times_played < 0:
+            continue
+        chips, mult = compute_hand_stats(name, level)
+        validated.append({
+            "name": name,
+            "level": level,
+            "times_played": times_played,
+            "chips": chips,
+            "mult": mult,
+        })
+    return validated if validated else None
 
 
 def _build_run_brief(state: dict | None) -> dict[str, list[str]]:
@@ -338,6 +377,7 @@ async def chat(
     message: str = Form(...),
     history: str | None = Form(default=None),
     files: list[UploadFile] | None = File(default=None),
+    hand_settings: str | None = Form(default=None),
 ):
     """
     Full coaching pipeline. Returns SSE stream of text chunks.
@@ -349,6 +389,7 @@ async def chat(
     low_confidence = False
     cv_failure_reason: str | None = None
     chat_history = _parse_history(history)
+    parsed_hand_settings = _parse_hand_settings(hand_settings)
 
     uploads = await _read_image_uploads(files, max_files=MAX_CHAT_IMAGES)
     image_bytes_list = [item["bytes"] for item in uploads]
@@ -389,6 +430,7 @@ async def chat(
             image_bytes_list,
             low_confidence,
             cv_failure_reason,
+            parsed_hand_settings,
         ):
             payload = json.dumps(event)
             yield f"data: {payload}\n\n"
@@ -413,6 +455,7 @@ async def _stream_coach(
     image_bytes_list: list[bytes],
     low_confidence: bool,
     cv_failure_reason: str | None,
+    hand_settings: list[dict] | None,
 ) -> AsyncIterator[dict]:
     """Run coach.stream_response in a thread pool (sync inference SDK)."""
     coach = _get_coach()
@@ -429,6 +472,7 @@ async def _stream_coach(
             image_bytes_list=image_bytes_list,
             low_confidence=low_confidence,
             cv_failure_reason=cv_failure_reason,
+            hand_settings=hand_settings,
         )
         # coach.stream_response is an async generator – run it synchronously
         new_loop = _asyncio.new_event_loop()
