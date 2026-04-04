@@ -126,8 +126,8 @@ class BalatroCoach:
         additional_game_states = additional_game_states or []
         image_bytes_list = image_bytes_list or []
 
-        # ── Low confidence: ask for clarification ────────────────────────────
-        if low_confidence and game_state and game_state.get("low_confidence"):
+        # ── Low confidence: ask for clarification only when no state at all ─────
+        if low_confidence and not game_state:
             yield LOW_CONFIDENCE_MESSAGE
             return
         if image_bytes_list and not game_state and cv_failure_reason and not self._vision_models:
@@ -161,6 +161,7 @@ class BalatroCoach:
             cv_failure_reason=cv_failure_reason,
             hand_settings=hand_settings,
             level_overrides=level_overrides,
+            low_confidence=low_confidence,
         )
 
         history_messages = self._sanitize_history(history or [])
@@ -189,6 +190,7 @@ class BalatroCoach:
                     cv_failure_reason=cv_failure_reason,
                     hand_settings=hand_settings,
                     level_overrides=level_overrides,
+                    low_confidence=low_confidence,
                 )
                 active_messages = [*messages, {"role": "user", "content": content_with_image}]
             try:
@@ -361,9 +363,15 @@ class BalatroCoach:
         cv_failure_reason: str | None,
         hand_settings: list[dict] | None,
         level_overrides: dict[str, int] | None = None,
+        low_confidence: bool = False,
     ) -> list[dict]:
         user_content: list[dict] = []
         user_content.append({"type": "text", "text": f"{RULES_GUARDRAILS_NOTE}\n"})
+        if game_state and low_confidence:
+            user_content.append({
+                "type": "text",
+                "text": "*Note: CV confidence is low — some fields may be misread. Ask for clarification only if a specific field is critical to your advice.*\n",
+            })
         if game_state:
             state_text = json.dumps(game_state, indent=2)
             user_content.append(

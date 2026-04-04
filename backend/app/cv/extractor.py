@@ -163,7 +163,7 @@ class StateExtractor:
 
         # ── Confidence summary ────────────────────────────────────────────────
         if confidences:
-            state.confidence = min(confidences)
+            state.confidence = sum(confidences) / len(confidences)
             state.low_confidence = state.confidence < self._conf_threshold
         else:
             # no detections at all → definitely low confidence
