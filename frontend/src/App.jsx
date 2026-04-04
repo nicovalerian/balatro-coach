@@ -82,20 +82,6 @@ const EMPTY_GAME_STATE = {
       "Right-side xMult finishers",
       "Economy jokers that fund rerolls",
     ],
-    hand_settings: [
-      { name: "Flush Five", level: 1, chips: 160, mult: 16 },
-      { name: "Flush House", level: 1, chips: 140, mult: 14 },
-      { name: "Five of a Kind", level: 1, chips: 120, mult: 12 },
-      { name: "Straight Flush", level: 1, chips: 100, mult: 8 },
-      { name: "Four of a Kind", level: 1, chips: 60, mult: 7 },
-      { name: "Full House", level: 1, chips: 40, mult: 4 },
-      { name: "Flush", level: 1, chips: 35, mult: 4 },
-      { name: "Straight", level: 1, chips: 30, mult: 4 },
-      { name: "Three of a Kind", level: 1, chips: 30, mult: 3 },
-      { name: "Two Pair", level: 1, chips: 20, mult: 2 },
-      { name: "Pair", level: 1, chips: 10, mult: 2 },
-      { name: "High Card", level: 1, chips: 5, mult: 1 },
-    ],
   },
 };
 
@@ -112,7 +98,7 @@ function PromptButton({ prompt, onClick }) {
   );
 }
 
-function SidebarPanel({ gameState, mobile = false, onClose }) {
+function SidebarPanel({ gameState, handSettings, updateHandSetting, mobile = false, onClose }) {
   return (
     <div className="flex h-full flex-col p-4 sm:p-5">
       <section className="terminal-panel flex min-h-0 flex-1 flex-col p-4 sm:p-5">
@@ -144,7 +130,11 @@ function SidebarPanel({ gameState, mobile = false, onClose }) {
           Quick reminders, synergy targets, and hand values update here as screenshots are analyzed.
         </p>
         <div className="mt-4 min-h-0 flex-1 overflow-y-auto pb-2 pr-1">
-          <GameStateCard state={gameState ?? EMPTY_GAME_STATE} />
+          <GameStateCard
+            state={gameState ?? EMPTY_GAME_STATE}
+            handSettings={handSettings}
+            updateHandSetting={updateHandSetting}
+          />
         </div>
       </section>
     </div>
@@ -162,7 +152,7 @@ function EmptyChatState() {
 }
 
 export default function App() {
-  const { messages, gameState, isLoading, sendMessage, clearChat } = useChat();
+  const { messages, gameState, handSettings, isLoading, sendMessage, updateHandSetting, clearChat } = useChat();
   const [input, setInput] = useState("");
   const [imageFiles, setImageFiles] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -218,7 +208,11 @@ export default function App() {
         >
           {sidebarVisible ? (
             <div className="terminal-shell h-full overflow-hidden">
-              <SidebarPanel gameState={gameState} />
+              <SidebarPanel
+                gameState={gameState}
+                handSettings={handSettings}
+                updateHandSetting={updateHandSetting}
+              />
             </div>
           ) : null}
         </aside>
@@ -245,6 +239,8 @@ export default function App() {
                   >
                     <SidebarPanel
                       gameState={gameState}
+                      handSettings={handSettings}
+                      updateHandSetting={updateHandSetting}
                       mobile
                       onClose={() => setSidebarOpen(false)}
                     />

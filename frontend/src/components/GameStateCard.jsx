@@ -1,37 +1,52 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, Minus, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-export default function GameStateCard({ state }) {
+// ── Planet card scaling table (mirrors backend hand_eval.py) ─────────────────
+// Source: https://balatrogame.fandom.com/wiki/Planet_Cards
+const HAND_STATS = {
+  "High Card":        { baseChips: 5,   baseMult: 1,  chipsPerLevel: 10, multPerLevel: 1,  planet: "Pluto" },
+  "Pair":             { baseChips: 10,  baseMult: 2,  chipsPerLevel: 15, multPerLevel: 1,  planet: "Mercury" },
+  "Two Pair":         { baseChips: 20,  baseMult: 2,  chipsPerLevel: 20, multPerLevel: 1,  planet: "Uranus" },
+  "Three of a Kind":  { baseChips: 30,  baseMult: 3,  chipsPerLevel: 20, multPerLevel: 2,  planet: "Venus" },
+  "Straight":         { baseChips: 30,  baseMult: 4,  chipsPerLevel: 30, multPerLevel: 3,  planet: "Earth" },
+  "Flush":            { baseChips: 35,  baseMult: 4,  chipsPerLevel: 15, multPerLevel: 2,  planet: "Jupiter" },
+  "Full House":       { baseChips: 40,  baseMult: 4,  chipsPerLevel: 25, multPerLevel: 2,  planet: "Saturn" },
+  "Four of a Kind":   { baseChips: 60,  baseMult: 7,  chipsPerLevel: 30, multPerLevel: 3,  planet: "Mars" },
+  "Straight Flush":   { baseChips: 100, baseMult: 8,  chipsPerLevel: 40, multPerLevel: 4,  planet: "Neptune" },
+  "Royal Flush":      { baseChips: 100, baseMult: 8,  chipsPerLevel: 40, multPerLevel: 4,  planet: "Planet X" },
+  "Five of a Kind":   { baseChips: 120, baseMult: 12, chipsPerLevel: 35, multPerLevel: 3,  planet: "Eris" },
+  "Flush House":      { baseChips: 140, baseMult: 14, chipsPerLevel: 40, multPerLevel: 4,  planet: "Ceres" },
+  "Flush Five":       { baseChips: 160, baseMult: 16, chipsPerLevel: 50, multPerLevel: 3,  planet: "Black Hole" },
+};
+
+function computeHandStats(name, level) {
+  const s = HAND_STATS[name];
+  if (!s) return { chips: "?", mult: "?" };
+  const bonus = Math.max(0, level - 1);
+  return {
+    chips: s.baseChips + bonus * s.chipsPerLevel,
+    mult: s.baseMult + bonus * s.multPerLevel,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function GameStateCard({ state, handSettings, updateHandSetting }) {
   if (!state) return null;
 
   const sidebar = state.sidebar ?? {};
   const reminders = sidebar.reminders ?? [];
   const synergyTargets = sidebar.synergy_targets ?? [];
-  const [handSettings, setHandSettings] = useState(sidebar.hand_settings ?? []);
   const [openSections, setOpenSections] = useState({
     brief: true,
     jokers: true,
     hands: true,
   });
 
-  useEffect(() => {
-    setHandSettings(sidebar.hand_settings ?? []);
-  }, [sidebar.hand_settings]);
-
   const toggleSection = (key) => {
     setOpenSections((current) => ({ ...current, [key]: !current[key] }));
-  };
-
-  const updateHandValue = (index, field, delta) => {
-    setHandSettings((current) =>
-      current.map((hand, handIndex) => {
-        if (handIndex !== index) return hand;
-        const nextValue = Math.max(0, Number(hand[field] ?? 0) + delta);
-        return { ...hand, [field]: nextValue };
-      })
-    );
   };
 
   return (
@@ -98,41 +113,95 @@ export default function GameStateCard({ state }) {
         open={openSections.hands}
         onToggle={() => toggleSection("hands")}
       >
-        <div className="space-y-2">
-          {handSettings.map((hand, index) => (
-            <div
+        <div className="space-y-1.5">
+          {(handSettings ?? []).map((hand, index) => (
+            <HandRow
               key={hand.name}
-              className="rounded-[14px] border border-white/10 bg-black/18 px-3 py-2"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="terminal-copy truncate text-[12px] font-medium text-[#edf2ef]">
-                    {hand.name}
-                  </p>
-                  <p className="pixel-font mt-1 text-[10px] text-[#9aa9a0]">Lvl {hand.level}</p>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  <ValueStepper
-                    colorClass="border-[#3498db]/55 bg-[#3498db]/16 text-[#d9efff]"
-                    value={hand.chips}
-                    onDecrease={() => updateHandValue(index, "chips", -5)}
-                    onIncrease={() => updateHandValue(index, "chips", 5)}
-                  />
-                  <ValueStepper
-                    colorClass="border-[#e43f3f]/55 bg-[#e43f3f]/16 text-[#ffd7d7]"
-                    prefix="x"
-                    value={hand.mult}
-                    onDecrease={() => updateHandValue(index, "mult", -1)}
-                    onIncrease={() => updateHandValue(index, "mult", 1)}
-                  />
-                </div>
-              </div>
-            </div>
+              hand={hand}
+              onLevelChange={(delta) => updateHandSetting?.(index, "level", delta)}
+              onTimesPlayedChange={(delta) => updateHandSetting?.(index, "times_played", delta)}
+            />
           ))}
         </div>
       </Section>
     </div>
+  );
+}
+
+function HandRow({ hand, onLevelChange, onTimesPlayedChange }) {
+  const stats = computeHandStats(hand.name, hand.level);
+  const planet = HAND_STATS[hand.name]?.planet ?? "";
+  const isLeveled = hand.level > 1;
+
+  return (
+    <div
+      className={cn(
+        "rounded-[12px] border px-3 py-2 transition-colors",
+        isLeveled
+          ? "border-white/18 bg-[#1a2e24]/60"
+          : "border-white/8 bg-black/18"
+      )}
+    >
+      {/* Top row: name + planet */}
+      <div className="mb-1.5 flex items-baseline gap-1.5">
+        <span className="terminal-copy text-[11px] font-semibold text-[#edf2ef]">
+          {hand.name}
+        </span>
+        <span className="pixel-font text-[9px] text-[#6a8070]">{planet}</span>
+      </div>
+
+      {/* Controls row */}
+      <div className="flex items-center justify-between gap-2">
+        {/* Level stepper */}
+        <div className="flex items-center gap-1">
+          <StepBtn direction="dec" onClick={onLevelChange} aria-label="Decrease level" />
+          <span
+            className={cn(
+              "pixel-font min-w-[48px] rounded-full px-2 py-0.5 text-center text-[10px]",
+              isLeveled
+                ? "bg-white/90 text-[#1a2a2a] shadow-sm"
+                : "bg-white/12 text-[#c8d4ce]"
+            )}
+          >
+            lvl.{hand.level}
+          </span>
+          <StepBtn direction="inc" onClick={onLevelChange} aria-label="Increase level" />
+        </div>
+
+        {/* Times played stepper */}
+        <div className="flex items-center gap-1">
+          <StepBtn direction="dec" onClick={onTimesPlayedChange} aria-label="Decrease times played" />
+          <span className="pixel-font min-w-[36px] rounded-full bg-[#2a3a30] px-2 py-0.5 text-center text-[10px] text-[#ff8f00]">
+            {hand.times_played}×
+          </span>
+          <StepBtn direction="inc" onClick={onTimesPlayedChange} aria-label="Increase times played" />
+        </div>
+
+        {/* Chips × Mult display (read-only, computed from level) */}
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="pixel-font min-w-[28px] rounded-full bg-[#009dff] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
+            {stats.chips}
+          </span>
+          <span className="pixel-font text-[9px] text-[#6a8070]">×</span>
+          <span className="pixel-font min-w-[20px] rounded-full bg-[#FE5F55] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
+            {stats.mult}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StepBtn({ direction, onClick }) {
+  const delta = direction === "inc" ? 1 : -1;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(delta)}
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-white/15 bg-[#374244] text-[#9aa9a0] transition-colors hover:border-white/50 hover:text-white active:scale-95"
+    >
+      {direction === "dec" ? <Minus className="h-2.5 w-2.5" /> : <Plus className="h-2.5 w-2.5" />}
+    </button>
   );
 }
 
@@ -148,33 +217,6 @@ function Section({ title, open, onToggle, children }) {
       <div className={cn("expandable-section mt-3 opacity-100", open && "expandable-section-open")}>
         <div className="expandable-inner">{children}</div>
       </div>
-    </div>
-  );
-}
-
-function ValueStepper({ value, prefix = "", colorClass, onDecrease, onIncrease }) {
-  return (
-    <div className={cn("flex items-center gap-1 rounded-full border px-1.5 py-1", colorClass)}>
-      <button
-        type="button"
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-black/20"
-        onClick={onDecrease}
-        aria-label="Decrease value"
-      >
-        <Minus className="h-3 w-3" />
-      </button>
-      <span className="pixel-font min-w-[36px] text-center text-[10px]">
-        {prefix}
-        {value}
-      </span>
-      <button
-        type="button"
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-black/20"
-        onClick={onIncrease}
-        aria-label="Increase value"
-      >
-        <Plus className="h-3 w-3" />
-      </button>
     </div>
   );
 }

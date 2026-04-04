@@ -4,6 +4,7 @@ export function sendChatMessage(
   message,
   imageFiles,
   history,
+  handSettings,
   { onState, onText, onDone, onError }
 ) {
   const ctrl = new AbortController();
@@ -19,6 +20,10 @@ export function sendChatMessage(
 
   if (Array.isArray(history) && history.length > 0) {
     body.append("history", JSON.stringify(history));
+  }
+
+  if (Array.isArray(handSettings) && handSettings.length > 0) {
+    body.append("hand_settings", JSON.stringify(handSettings));
   }
 
   fetch(`${API_BASE}/api/chat`, {
