@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ChevronDown, HelpCircle, Minus, Plus } from "lucide-react";
+import { useRef, useState } from "react";
+import { ChevronDown, HelpCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -145,9 +145,36 @@ function HandRow({ hand, onLevelChange, onTimesPlayedChange }) {
   const planet = HAND_STATS[hand.name]?.planet ?? "";
   const isLeveled = hand.level > 1;
 
-  const handleTimesPlayedInput = (e) => {
-    const next = Math.max(0, parseInt(e.target.value, 10) || 0);
+  // Local string state so the user can fully clear and retype
+  const [levelStr, setLevelStr] = useState(String(hand.level));
+  const [playedStr, setPlayedStr] = useState(String(hand.times_played));
+
+  // Sync when parent value changes (e.g. reset from outside)
+  const prevLevelRef = useRef(hand.level);
+  if (prevLevelRef.current !== hand.level) {
+    prevLevelRef.current = hand.level;
+    setLevelStr(String(hand.level));
+  }
+  const prevPlayedRef = useRef(hand.times_played);
+  if (prevPlayedRef.current !== hand.times_played) {
+    prevPlayedRef.current = hand.times_played;
+    setPlayedStr(String(hand.times_played));
+  }
+
+  const commitLevel = () => {
+    const next = Math.max(1, parseInt(levelStr, 10) || 1);
+    setLevelStr(String(next));
+    onLevelChange(next - hand.level);
+  };
+
+  const commitPlayed = () => {
+    const next = Math.max(0, parseInt(playedStr, 10) || 0);
+    setPlayedStr(String(next));
     onTimesPlayedChange(next - hand.times_played);
+  };
+
+  const handleKeyDown = (commit) => (e) => {
+    if (e.key === "Enter") { e.currentTarget.blur(); commit(); }
   };
 
   return (
@@ -161,69 +188,60 @@ function HandRow({ hand, onLevelChange, onTimesPlayedChange }) {
     >
       {/* Top row: name + planet */}
       <div className="mb-1.5 flex items-baseline gap-1.5">
-        <span className="terminal-copy text-[11px] font-semibold text-[#edf2ef]">
-          {hand.name}
-        </span>
+        <span className="terminal-copy text-[11px] font-semibold text-[#edf2ef]">{hand.name}</span>
         <span className="pixel-font text-[9px] text-[#6a8070]">{planet}</span>
       </div>
 
       {/* Controls row */}
-      <div className="flex items-center justify-between gap-2">
-        {/* Level stepper */}
+      <div className="flex items-center gap-3">
+        {/* Level input */}
         <div className="flex items-center gap-1">
-          <StepBtn direction="dec" onClick={onLevelChange} aria-label="Decrease level" />
-          <span
+          <span className="pixel-font text-[9px] text-[#6a8070]">lvl</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={levelStr}
+            onChange={(e) => setLevelStr(e.target.value)}
+            onBlur={commitLevel}
+            onKeyDown={handleKeyDown(commitLevel)}
+            aria-label="Hand level"
             className={cn(
-              "pixel-font min-w-[48px] rounded-full px-2 py-0.5 text-center text-[10px]",
+              "pixel-font w-9 rounded-full border-0 px-1.5 py-0.5 text-center text-[10px] outline-none",
               isLeveled
                 ? "bg-white/90 text-[#1a2a2a] shadow-sm"
                 : "bg-white/12 text-[#c8d4ce]"
             )}
-          >
-            lvl.{hand.level}
-          </span>
-          <StepBtn direction="inc" onClick={onLevelChange} aria-label="Increase level" />
+          />
         </div>
 
-        {/* Times played — number input */}
+        {/* Times played input */}
         <div className="flex items-center gap-1">
           <span className="pixel-font text-[9px] text-[#6a8070]">played</span>
           <input
-            type="number"
-            min="0"
-            value={hand.times_played}
-            onChange={handleTimesPlayedInput}
+            type="text"
+            inputMode="numeric"
+            value={playedStr}
+            onChange={(e) => setPlayedStr(e.target.value)}
+            onBlur={commitPlayed}
+            onKeyDown={handleKeyDown(commitPlayed)}
             aria-label="Times played"
-            className="pixel-font w-12 rounded-full border-0 bg-[#2a3a30] px-2 py-0.5 text-center text-[10px] text-[#ff8f00] outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="pixel-font w-9 rounded-full border-0 bg-[#2a3a30] px-1.5 py-0.5 text-center text-[10px] text-[#ff8f00] outline-none"
           />
           <span className="pixel-font text-[9px] text-[#6a8070]">×</span>
         </div>
 
-        {/* Chips × Mult display (read-only, computed from level) */}
-        <div className="flex shrink-0 items-center gap-1">
-          <span className="pixel-font min-w-[28px] rounded-full bg-[#009dff] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
+        {/* Chips × Mult (read-only) */}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <span className="pixel-font rounded-full bg-[#009dff] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
             {stats.chips}
           </span>
           <span className="pixel-font text-[9px] text-[#6a8070]">×</span>
-          <span className="pixel-font min-w-[20px] rounded-full bg-[#FE5F55] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
+          <span className="pixel-font rounded-full bg-[#FE5F55] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
             {stats.mult}
           </span>
         </div>
       </div>
     </div>
-  );
-}
-
-function StepBtn({ direction, onClick }) {
-  const delta = direction === "inc" ? 1 : -1;
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(delta)}
-      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-white/15 bg-[#374244] text-[#9aa9a0] transition-colors hover:border-white/50 hover:text-white active:scale-95"
-    >
-      {direction === "dec" ? <Minus className="h-2.5 w-2.5" /> : <Plus className="h-2.5 w-2.5" />}
-    </button>
   );
 }
 

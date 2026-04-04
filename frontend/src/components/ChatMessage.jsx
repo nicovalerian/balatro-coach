@@ -1,4 +1,5 @@
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +86,7 @@ export default function ChatMessage({
           ) : (
             <div className="markdown-copy terminal-copy text-[13px] leading-6 text-inherit">
               <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
                 components={{
                   p: ({ children }) => <p className="mb-3">{children}</p>,
                   ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5">{children}</ul>,
@@ -126,6 +128,24 @@ export default function ChatMessage({
                     <blockquote className="mb-3 border-l-2 border-[#3498db] pl-4 text-[#dceeff]">
                       {children}
                     </blockquote>
+                  ),
+                  table: ({ children }) => (
+                    <div className="mb-3 overflow-x-auto">
+                      <table className="w-full border-collapse text-[12px]">{children}</table>
+                    </div>
+                  ),
+                  thead: ({ children }) => (
+                    <thead className="border-b border-white/20">{children}</thead>
+                  ),
+                  tbody: ({ children }) => <tbody>{children}</tbody>,
+                  tr: ({ children }) => (
+                    <tr className="border-b border-white/8 last:border-0">{children}</tr>
+                  ),
+                  th: ({ children }) => (
+                    <th className="px-3 py-1.5 text-left font-semibold text-[#f2c237]">{children}</th>
+                  ),
+                  td: ({ children }) => (
+                    <td className="px-3 py-1.5 text-[#dce3de]">{children}</td>
                   ),
                 }}
               >
