@@ -269,6 +269,13 @@ def _build_run_brief(state: dict | None) -> dict[str, list[str]]:
         if item not in synergy_targets:
             synergy_targets.append(item)
 
+    if not reminders:
+        screen = state.get("screen_type", "unknown")
+        if screen == "unknown":
+            reminders.append("Screen type unclear — describe your situation and ask your question.")
+        else:
+            reminders.append("No resource data extracted. Describe your situation for tailored advice.")
+
     return {
         "reminders": reminders[:4],
         "synergy_targets": synergy_targets[:3],

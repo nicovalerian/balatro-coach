@@ -98,6 +98,16 @@ class StateExtractor:
         elif "panel_blind" in ui_labels and "button_play" not in ui_labels:
             state.screen_type = "blind_select"
 
+        # Fallback: infer from entity types when UI buttons weren't detected
+        if state.screen_type == "unknown" and entities:
+            entity_labels = {d.label for d in entities}
+            shop_labels = {"card_tarot", "card_planet", "card_spectral", "card_voucher"}
+            if "card" in entity_labels:
+                # Playing-card entities only appear in the hand area
+                state.screen_type = "hand"
+            elif entity_labels & shop_labels and "card" not in entity_labels:
+                state.screen_type = "shop"
+
         # ── Cards in hand ─────────────────────────────────────────────────────
         card_dets = [d for d in entities if d.label == "card"]
         for det in sorted(card_dets, key=lambda d: d.x1):

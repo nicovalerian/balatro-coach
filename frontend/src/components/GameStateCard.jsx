@@ -85,7 +85,7 @@ export default function GameStateCard({ state, handSettings, updateHandSetting }
       </div>
 
       <Section
-        title="Game State / Run Brief"
+        title="Run Brief"
         open={openSections.brief}
         onToggle={() => toggleSection("brief")}
       >
