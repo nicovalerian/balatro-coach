@@ -96,6 +96,7 @@ See `.env.example`. Main settings:
 | Balatro Wiki | Card-level chunks | `build_index.py` |
 | Mechanics corpus (rarity/activation tags) | Card-level chunks | `build_index.py` |
 | Curated strategy guides | Guide-level chunks | `build_index.py` |
+| Planet card scaling tier guide | Guide-level chunks | `build_index.py` |
 | Synergy corpus (LLM-generated) | Card-level chunks | `build_index.py --synergies` |
 
 Cached JSONL lives in `backend/data/` and can be rebuilt with `--force`.
