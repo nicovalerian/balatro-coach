@@ -158,6 +158,7 @@ def _parse_hand_settings(raw: str | None) -> list[dict] | None:
         logger.warning("Invalid hand_settings payload: not valid JSON")
         return None
     if not isinstance(payload, list):
+        logger.warning("Invalid hand_settings payload: expected list")
         return None
 
     from .llm.hand_eval import HAND_BASE, compute_hand_stats
