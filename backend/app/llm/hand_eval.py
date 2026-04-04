@@ -93,6 +93,7 @@ def compute_hand_stats(name: str, level: int) -> tuple[int, int]:
     bonus = max(0, level - 1)
     return base_chips + bonus * chips_per_lvl, base_mult + bonus * mult_per_lvl
 
+
 HAND_PRIORITY = {
     "High Card": 1,
     "Pair": 2,
