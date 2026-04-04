@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Iterator
@@ -169,6 +170,19 @@ STRATEGY_GUIDES = [
 ]
 
 
+def _clean_wiki_text(text: str) -> str:
+    """Strip wiki markup artifacts from scraped page text."""
+    text = re.sub(r'\[edit\]', '', text)                                   # [edit] section links
+    text = re.sub(r'\[\d+\]', '', text)                                    # citation numbers [1]
+    text = re.sub(r'v\s*[•·]\s*d\s*[•·]\s*e', '', text, flags=re.I)      # nav templates
+    text = re.sub(r'\{\{[^}]*\}\}', '', text)                             # {{template}} markers
+    text = re.sub(r'\[\[(?:[^\]|]+\|)?([^\]]+)\]\]', r'\1', text)        # [[link|text]] → text
+    text = re.sub(r'Retrieved from "https?://[^\s"]+"', '', text)         # retrieval footers
+    text = re.sub(r'This page was last edited.*', '', text, flags=re.S)   # edit footers
+    text = re.sub(r'\n{3,}', '\n\n', text)                                # collapse blank lines
+    return text.strip()
+
+
 def _fetch(url: str, delay: float = 1.0) -> BeautifulSoup | None:
     try:
         time.sleep(delay)
@@ -213,37 +227,65 @@ def _iter_category_members(category_title: str, delay: float = 0.2) -> Iterator[
             break
 
 
-def scrape_wiki_card(page_url: str) -> dict | None:
-    """Scrape a single card/joker wiki page → {name, text, metadata}."""
+def scrape_wiki_card(page_url: str) -> list[dict]:
+    """
+    Scrape a single card/joker wiki page → list of paragraph-level chunks.
+
+    Each chunk carries the parent card name in metadata so retrieval stays
+    attributable. Splitting into paragraphs gives finer retrieval granularity
+    than one giant blob per page.
+    """
     soup = _fetch(page_url)
     if not soup:
-        return None
+        return []
     title = soup.find("h1", {"id": "firstHeading"})
     name = title.get_text(strip=True) if title else page_url.split("/")[-1]
     content_div = soup.find("div", {"id": "mw-content-text"})
     if not content_div:
-        return None
+        return []
 
-    # Extract all paragraphs and list items
+    # Collect tag text, grouping h2/h3 with their following content
     parts: list[str] = []
+    current_section: list[str] = []
     for tag in content_div.find_all(["p", "li", "h2", "h3"]):
         text = tag.get_text(" ", strip=True)
-        if text and len(text) > 10:
-            parts.append(text)
+        if not text or len(text) < 10:
+            continue
+        if tag.name in ("h2", "h3"):
+            if current_section:
+                parts.append("\n".join(current_section))
+            current_section = [text]
+        else:
+            current_section.append(text)
+    if current_section:
+        parts.append("\n".join(current_section))
 
-    full_text = "\n".join(parts)
+    full_text = _clean_wiki_text("\n\n".join(parts))
     if len(full_text) < 30:
-        return None
+        return []
 
-    return {
-        "name": name,
-        "text": f"# {name}\n\n{full_text}",
-        "metadata": {"type": "card", "name": name, "source": "wiki", "url": page_url},
-    }
+    # Split into paragraph-level chunks; each ≥80 chars gets its own doc
+    raw_chunks = [c.strip() for c in full_text.split("\n\n") if len(c.strip()) >= 80]
+    if not raw_chunks:
+        # Fallback: single doc if no meaningful paragraph breaks
+        return [{
+            "name": name,
+            "text": f"# {name}\n\n{full_text}",
+            "metadata": {"type": "card", "name": name, "source": "wiki", "url": page_url},
+        }]
+
+    docs: list[dict] = []
+    for i, chunk in enumerate(raw_chunks):
+        docs.append({
+            "name": name if i == 0 else f"{name} ({i})",
+            "text": f"# {name}\n\n{chunk}",
+            "metadata": {"type": "card", "name": name, "source": "wiki", "url": page_url},
+        })
+    return docs
 
 
 def iter_wiki_cards() -> Iterator[dict]:
-    """Yield all card docs from wiki category pages."""
+    """Yield all card docs from wiki category pages (paragraph-level chunks)."""
     seen: set[str] = set()
     for category in CARD_CATEGORIES:
         for title in _iter_category_members(category, delay=0.4):
@@ -252,10 +294,10 @@ def iter_wiki_cards() -> Iterator[dict]:
             if url in seen:
                 continue
             seen.add(url)
-            doc = scrape_wiki_card(url)
-            if doc:
-                logger.info("wiki: scraped %s", doc["name"])
-                yield doc
+            docs = scrape_wiki_card(url)
+            if docs:
+                logger.info("wiki: scraped %s (%d chunks)", docs[0]["name"], len(docs))
+                yield from docs
 
 
 def iter_mechanics_docs() -> Iterator[dict]:

@@ -25,6 +25,7 @@ from typing import Any
 from PIL import Image
 
 from .detector import BalatroDetector
+from .joker_names import fuzzy_match_joker
 from .ocr import read_number, read_text
 
 logger = logging.getLogger(__name__)
@@ -121,14 +122,16 @@ class StateExtractor:
         joker_dets = [d for d in entities if d.label == "card_joker"]
         for i, det in enumerate(sorted(joker_dets, key=lambda d: d.x1)):
             confidences.append(det.confidence)
-            name = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
-            state.jokers.append({"name": name or f"Joker {i+1}", "slot": i})
+            raw = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
+            name = fuzzy_match_joker(raw) or raw or f"Joker {i+1}"
+            state.jokers.append({"name": name, "slot": i})
 
         # ── Consumables (tarot / planet / spectral) ───────────────────────────
         for label in ("card_tarot", "card_planet", "card_spectral"):
             for det in [d for d in entities if d.label == label]:
                 confidences.append(det.confidence)
-                name = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
+                raw = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
+                name = fuzzy_match_joker(raw) or raw
                 state.consumables.append({"type": label.split("_")[1], "name": name})
 
         # ── UI: score panel ───────────────────────────────────────────────────
@@ -165,7 +168,8 @@ class StateExtractor:
             )]
             state.shop["items"] = []
             for det in shop_items:
-                name = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
+                raw = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
+                name = fuzzy_match_joker(raw) or raw
                 state.shop["items"].append({
                     "type": det.label.split("_")[1] if "_" in det.label else det.label,
                     "name": name,

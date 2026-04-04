@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # RAG
     chroma_persist_dir: Path = ROOT / "data" / "chroma"
     embed_model: str = "all-MiniLM-L6-v2"
-    retrieval_top_k: int = 6  # 3 card-level + 3 guide-level
+    retrieval_top_k: int = 10  # more chunks after paragraph-level re-index
 
     # LLM
     max_output_tokens: int = 2048

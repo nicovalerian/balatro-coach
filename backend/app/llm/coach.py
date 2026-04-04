@@ -507,8 +507,8 @@ def _format_context(chunks: list[dict]) -> str:
         src = chunk["metadata"].get("source", "")
         name = chunk["metadata"].get("name", "")
         header = f"[{name or src}]"
-        # Trim to ~400 chars per chunk to stay within token budget
-        text = chunk["text"][:400].strip()
+        # Trim to ~700 chars per chunk to stay within token budget
+        text = chunk["text"][:700].strip()
         parts.append(f"{header}\n{text}")
     return "\n\n".join(parts)
 

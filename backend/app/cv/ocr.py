@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,24 @@ except ImportError:
     logger.warning("rapidocr-onnxruntime not installed – OCR disabled")
 
 
+def _preprocess_crop(image: Image.Image) -> Image.Image:
+    """Upscale small crops and boost contrast to improve OCR on pixel-art fonts."""
+    w, h = image.size
+    if w < 200:
+        scale = max(2, 200 // max(w, 1))
+        image = image.resize((w * scale, h * scale), Image.LANCZOS)
+    # Grayscale + contrast boost helps RapidOCR on stylised Balatro fonts
+    image = image.convert("L").convert("RGB")
+    image = ImageEnhance.Contrast(image).enhance(2.0)
+    return image
+
+
 def read_text(image: Image.Image) -> str:
     """Return stripped text from a PIL crop, or empty string on failure."""
     if not _OCR_AVAILABLE:
         return ""
     try:
-        arr = np.array(image)
+        arr = np.array(_preprocess_crop(image))
         result, _ = _OCR(arr)
         if not result:
             return ""

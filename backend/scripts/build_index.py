@@ -19,6 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 from openai import OpenAI
 
 from app.config import settings
+from app.cv.joker_names import ALL_JOKER_NAMES
 from app.rag.ingest import (
     iter_wiki_cards,
     generate_synergy_notes,
@@ -35,36 +36,8 @@ MECHANICS_CACHE = DATA_DIR / "mechanics.jsonl"
 GUIDES_CACHE = DATA_DIR / "strategy_guides.jsonl"
 SYNERGY_CACHE = DATA_DIR / "synergies.jsonl"
 
-# Top jokers for synergy generation (expand as needed)
-JOKER_NAMES = [
-    "Joker", "Greedy Joker", "Lusty Joker", "Wrathful Joker", "Gluttonous Joker",
-    "Jolly Joker", "Zany Joker", "Mad Joker", "Crazy Joker", "Droll Joker",
-    "Sly Joker", "Wily Joker", "Clever Joker", "Devious Joker", "Crafty Joker",
-    "Half Joker", "Joker Stencil", "Four Fingers", "Mime", "Credit Card",
-    "Ceremonial Dagger", "Banner", "Mystic Summit", "Marble Joker", "Loyalty Card",
-    "8 Ball", "Misprint", "Dusk", "Raised Fist", "Chaos the Clown",
-    "Fibonacci", "Steel Joker", "Scary Face", "Abstract Joker", "Delayed Gratification",
-    "Hack", "Pareidolia", "Gros Michel", "Even Steven", "Odd Todd",
-    "Scholar", "Business Card", "Supernova", "Ride the Bus", "Space Joker",
-    "Egg", "Burglar", "Blackboard", "Runner", "Ice Cream",
-    "DNA", "Splash", "Blue Joker", "Sixth Sense", "Constellation",
-    "Hiker", "Card Sharp", "Red Card", "Madness", "Square Joker",
-    "Seance", "Riff-Raff", "Vampire", "Shortcut", "Hologram",
-    "Vagabond", "Baron", "Cloud 9", "Rocket", "Obelisk",
-    "Midas Mask", "Luchador", "Photograph", "Gift Card", "Turtle Bean",
-    "Erosion", "Reserved Parking", "Flash Card", "Popcorn", "Spare Trousers",
-    "Ancient Joker", "Ramen", "Walkie Talkie", "Seltzer", "Castle",
-    "Smiley Face", "Campfire", "Golden Ticket", "Mr. Bones", "Acrobat",
-    "Sock and Buskin", "Swashbuckler", "Troubadour", "Certificate", "Smeared Joker",
-    "Throwback", "Hanging Chad", "Rough Gem", "Bloodstone", "Arrowhead",
-    "Onyx Agate", "Glass Joker", "Showman", "Flower Pot", "Blueprint",
-    "Wee Joker", "Merry Andy", "Oops! All 6s", "The Idol", "Seeing Double",
-    "Matador", "Hit the Road", "The Duo", "The Trio", "The Family",
-    "The Order", "The Tribe", "Stuntman", "Invisible Joker", "Brainstorm",
-    "Satellite", "Shoot the Moon", "Driver's License", "Cartomancer", "Astronomer",
-    "Burnt Joker", "Bootstraps", "Caino", "Triboulet", "Yorick",
-    "Chicot", "Perkeo",
-]
+# Canonical joker list sourced from cv/joker_names.py (single source of truth)
+JOKER_NAMES: list[str] = sorted(ALL_JOKER_NAMES)
 
 
 def main():
