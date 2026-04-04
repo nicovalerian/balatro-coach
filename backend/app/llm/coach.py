@@ -100,6 +100,7 @@ class BalatroCoach:
         image_bytes_list: list[bytes] | None = None,
         low_confidence: bool = False,
         cv_failure_reason: str | None = None,
+        hand_settings: list[dict] | None = None,
     ) -> AsyncIterator[str]:
         """Yield text chunks as they stream from the configured inference model."""
         additional_game_states = additional_game_states or []
@@ -133,6 +134,7 @@ class BalatroCoach:
             image_bytes_list=image_bytes_list,
             allow_image=False,
             cv_failure_reason=cv_failure_reason,
+            hand_settings=hand_settings,
         )
 
         history_messages = self._sanitize_history(history or [])
@@ -159,6 +161,7 @@ class BalatroCoach:
                     image_bytes_list=image_bytes_list,
                     allow_image=True,
                     cv_failure_reason=cv_failure_reason,
+                    hand_settings=hand_settings,
                 )
                 active_messages = [*messages, {"role": "user", "content": content_with_image}]
             try:
@@ -329,6 +332,7 @@ class BalatroCoach:
         image_bytes_list: list[bytes],
         allow_image: bool,
         cv_failure_reason: str | None,
+        hand_settings: list[dict] | None,
     ) -> list[dict]:
         user_content: list[dict] = []
         user_content.append({"type": "text", "text": f"{RULES_GUARDRAILS_NOTE}\n"})
@@ -340,6 +344,9 @@ class BalatroCoach:
                     "text": f"**Current game state (extracted from screenshot):**\n```json\n{state_text}\n```\n",
                 }
             )
+        hand_settings_text = _format_hand_settings(hand_settings)
+        if hand_settings_text:
+            user_content.append({"type": "text", "text": f"{hand_settings_text}\n"})
         if additional_game_states:
             extra_state_text = json.dumps(additional_game_states, indent=2)
             user_content.append(
@@ -432,6 +439,28 @@ class BalatroCoach:
             return ""
 
         return "\n\n**Rule correction:**\n" + "\n".join(issues)
+
+
+def _format_hand_settings(hand_settings: list[dict] | None) -> str:
+    """Compact, LLM-readable summary of non-default hand levels."""
+    if not hand_settings:
+        return ""
+    non_default = [
+        hs for hs in hand_settings
+        if hs.get("level", 1) > 1 or hs.get("times_played", 0) > 0
+    ]
+    if not non_default:
+        return ""
+    lines = ["**Hand levels (player-configured — these override sidebar JSON defaults):**"]
+    for hs in non_default:
+        name = hs.get("name", "?")
+        level = hs.get("level", 1)
+        chips = hs.get("chips", "?")
+        mult = hs.get("mult", "?")
+        times_played = hs.get("times_played", 0)
+        played_str = f", played {times_played}×" if times_played > 0 else ""
+        lines.append(f"- {name}: Lvl {level} → {chips} chips × {mult} mult{played_str}")
+    return "\n".join(lines)
 
 
 def _format_context(chunks: list[dict]) -> str:
