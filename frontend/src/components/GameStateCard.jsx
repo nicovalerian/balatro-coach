@@ -1,6 +1,12 @@
 import { useState } from "react";
-import { ChevronDown, Minus, Plus } from "lucide-react";
+import { ChevronDown, HelpCircle, Minus, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 // ── Planet card scaling table (mirrors backend hand_eval.py) ─────────────────
@@ -112,6 +118,12 @@ export default function GameStateCard({ state, handSettings, updateHandSetting }
         title="Hand Settings"
         open={openSections.hands}
         onToggle={() => toggleSection("hands")}
+        helpText={
+          "Level — planet cards applied to this hand type. Each level boosts base chips × mult.\n\n" +
+          "Times played — how many times you've played this hand this run. " +
+          "Jokers like Observatory, Constellation, and Wee Joker scale with this count.\n\n" +
+          "Chips × mult shown are base values before card chips or joker effects."
+        }
       >
         <div className="space-y-1.5">
           {(handSettings ?? []).map((hand, index) => (
@@ -132,6 +144,11 @@ function HandRow({ hand, onLevelChange, onTimesPlayedChange }) {
   const stats = computeHandStats(hand.name, hand.level);
   const planet = HAND_STATS[hand.name]?.planet ?? "";
   const isLeveled = hand.level > 1;
+
+  const handleTimesPlayedInput = (e) => {
+    const next = Math.max(0, parseInt(e.target.value, 10) || 0);
+    onTimesPlayedChange(next - hand.times_played);
+  };
 
   return (
     <div
@@ -168,13 +185,18 @@ function HandRow({ hand, onLevelChange, onTimesPlayedChange }) {
           <StepBtn direction="inc" onClick={onLevelChange} aria-label="Increase level" />
         </div>
 
-        {/* Times played stepper */}
+        {/* Times played — number input */}
         <div className="flex items-center gap-1">
-          <StepBtn direction="dec" onClick={onTimesPlayedChange} aria-label="Decrease times played" />
-          <span className="pixel-font min-w-[36px] rounded-full bg-[#2a3a30] px-2 py-0.5 text-center text-[10px] text-[#ff8f00]">
-            {hand.times_played}×
-          </span>
-          <StepBtn direction="inc" onClick={onTimesPlayedChange} aria-label="Increase times played" />
+          <span className="pixel-font text-[9px] text-[#6a8070]">played</span>
+          <input
+            type="number"
+            min="0"
+            value={hand.times_played}
+            onChange={handleTimesPlayedInput}
+            aria-label="Times played"
+            className="pixel-font w-12 rounded-full border-0 bg-[#2a3a30] px-2 py-0.5 text-center text-[10px] text-[#ff8f00] outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+          <span className="pixel-font text-[9px] text-[#6a8070]">×</span>
         </div>
 
         {/* Chips × Mult display (read-only, computed from level) */}
@@ -205,15 +227,35 @@ function StepBtn({ direction, onClick }) {
   );
 }
 
-function Section({ title, open, onToggle, children }) {
+function Section({ title, open, onToggle, helpText, children }) {
   return (
     <div className="terminal-inset px-4 py-4">
-      <button type="button" className="dropdown-toggle w-full" onClick={onToggle}>
-        <span className="panel-label">{title}</span>
-        <ChevronDown
-          className={cn("h-4 w-4 transition-transform duration-200", open && "rotate-180")}
-        />
-      </button>
+      <div className="flex items-center gap-1.5">
+        <button type="button" className="dropdown-toggle flex-1" onClick={onToggle}>
+          <span className="panel-label">{title}</span>
+          <ChevronDown
+            className={cn("h-4 w-4 transition-transform duration-200", open && "rotate-180")}
+          />
+        </button>
+        {helpText ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex shrink-0 items-center justify-center rounded text-[#6a8070] transition-colors hover:text-[#c8d4ce]"
+                  aria-label="Help"
+                >
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-[220px] whitespace-pre-line text-[11px] leading-[1.5]">
+                {helpText}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
+      </div>
       <div className={cn("expandable-section mt-3 opacity-100", open && "expandable-section-open")}>
         <div className="expandable-inner">{children}</div>
       </div>

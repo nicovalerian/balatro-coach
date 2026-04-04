@@ -115,9 +115,8 @@ CARD_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 
-ASSUMPTION_TEXT = (
-    "Assumes Level 1 hand values, no enhancements/editions/seals, "
-    "no joker effects, and no boss/deck modifiers."
+_ASSUMPTION_BASE = (
+    "no enhancements/editions/seals, no joker effects, and no boss/deck modifiers."
 )
 
 
@@ -141,41 +140,52 @@ class HandEvaluation:
         return (self.hand_chips + self.card_chips) * self.hand_mult
 
 
-def build_hand_eval_note_from_text(text: str) -> str:
+def build_hand_eval_note_from_text(
+    text: str,
+    level_overrides: dict[str, int] | None = None,
+) -> str:
     cards = parse_cards_from_text(text)
     if len(cards) < 2:
         return ""
 
-    best = evaluate_best_hand(cards)
+    best = evaluate_best_hand(cards, level_overrides=level_overrides)
     if best is None:
         return ""
 
     parsed_cards = ", ".join(_format_card(c) for c in cards)
     played_cards = ", ".join(_format_card(c) for c in best.played_cards)
     formula = f"({best.hand_chips} + {best.card_chips}) x {best.hand_mult} = {best.base_total}"
+    level = (level_overrides or {}).get(best.hand_name, 1)
+    level_note = f"Level {level}" if level > 1 else "Level 1"
+    assumption_text = f"Uses {level_note} hand values, {_ASSUMPTION_BASE}"
 
     return (
         "**Deterministic hand evaluation from typed cards:**\n"
         f"- Parsed cards: {parsed_cards}\n"
         f"- Best playable hand (up to 5 cards): {best.hand_name} using {played_cards}\n"
         f"- Base score before jokers: {formula}\n"
-        f"- Assumptions: {ASSUMPTION_TEXT}"
+        f"- Assumptions: {assumption_text}"
     )
 
 
-def build_hand_eval_summary_from_text(text: str) -> str:
+def build_hand_eval_summary_from_text(
+    text: str,
+    level_overrides: dict[str, int] | None = None,
+) -> str:
     cards = parse_cards_from_text(text)
     if len(cards) < 2:
         return ""
 
-    best = evaluate_best_hand(cards)
+    best = evaluate_best_hand(cards, level_overrides=level_overrides)
     if best is None:
         return ""
 
     played_cards = ", ".join(_format_card(c) for c in best.played_cards)
+    level = (level_overrides or {}).get(best.hand_name, 1)
+    level_note = f" (Lvl {level})" if level > 1 else ""
     return (
         "Deterministic base-hand check: "
-        f"{best.hand_name} with {played_cards} -> "
+        f"{best.hand_name}{level_note} with {played_cards} -> "
         f"({best.hand_chips} + {best.card_chips}) x {best.hand_mult} = {best.base_total} "
         "(before jokers/editions)."
     )
@@ -191,7 +201,10 @@ def parse_cards_from_text(text: str) -> list[ParsedCard]:
     return cards
 
 
-def evaluate_best_hand(cards: list[ParsedCard]) -> HandEvaluation | None:
+def evaluate_best_hand(
+    cards: list[ParsedCard],
+    level_overrides: dict[str, int] | None = None,
+) -> HandEvaluation | None:
     if not cards:
         return None
 
@@ -201,7 +214,7 @@ def evaluate_best_hand(cards: list[ParsedCard]) -> HandEvaluation | None:
     max_size = min(5, len(cards))
     for size in range(1, max_size + 1):
         for combo in combinations(cards, size):
-            evaluation = _evaluate_combo(combo)
+            evaluation = _evaluate_combo(combo, level_overrides=level_overrides)
             key = (
                 HAND_PRIORITY[evaluation.hand_name],
                 evaluation.base_total,
@@ -215,11 +228,15 @@ def evaluate_best_hand(cards: list[ParsedCard]) -> HandEvaluation | None:
     return best_eval
 
 
-def _evaluate_combo(cards: tuple[ParsedCard, ...]) -> HandEvaluation:
+def _evaluate_combo(
+    cards: tuple[ParsedCard, ...],
+    level_overrides: dict[str, int] | None = None,
+) -> HandEvaluation:
     hand_name = _classify_hand(cards)
     rank_counts = Counter(c.rank for c in cards)
     scored = _scoring_cards(cards, rank_counts, hand_name)
-    hand_chips, hand_mult = HAND_BASE[hand_name]
+    level = (level_overrides or {}).get(hand_name, 1)
+    hand_chips, hand_mult = compute_hand_stats(hand_name, level)
     card_chips = sum(RANK_TO_CHIPS[c.rank] for c in scored)
     return HandEvaluation(
         hand_name=hand_name,

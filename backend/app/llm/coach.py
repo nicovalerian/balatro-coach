@@ -72,8 +72,23 @@ RULES_GUARDRAILS_NOTE = (
     "**Deterministic Balatro rule guardrails:**\n"
     "- Boss Blinds cannot be skipped.\n"
     "- If user says only 'Ante X boss blind', treat boss identity as unknown unless explicitly provided.\n"
-    "- At Level 1, Flush base is 35 chips x 4 mult; card chip values are added before multiplying.\n"
-    "- Face cards J/Q/K count as 10 chips each; Ace counts as 11 chips."
+    "- Scoring formula: (base_chips + card_chips) × (base_mult + additive_mult) × xMult_jokers\n"
+    "- Face cards J/Q/K count as 10 chips each; Ace counts as 11 chips.\n\n"
+    "**Planet card scaling table (base chips × mult, +per level):**\n"
+    "- High Card: 5×1, +10c/+1m (Pluto)\n"
+    "- Pair: 10×2, +15c/+1m (Mercury)\n"
+    "- Two Pair: 20×2, +20c/+1m (Uranus)\n"
+    "- Three of a Kind: 30×3, +20c/+2m (Venus)\n"
+    "- Straight: 30×4, +30c/+3m (Earth)\n"
+    "- Flush: 35×4, +15c/+2m (Jupiter)\n"
+    "- Full House: 40×4, +25c/+2m (Saturn)\n"
+    "- Four of a Kind: 60×7, +30c/+3m (Mars)\n"
+    "- Straight Flush: 100×8, +40c/+4m (Neptune)\n"
+    "- Royal Flush: 100×8, +40c/+4m (Planet X)\n"
+    "- Five of a Kind: 120×12, +35c/+3m (Eris)\n"
+    "- Flush House: 140×14, +40c/+4m (Ceres)\n"
+    "- Flush Five: 160×16, +50c/+3m (Black Hole)\n"
+    "Formula: chips = base + (level−1) × chips_per_level; mult = base + (level−1) × mult_per_level"
 )
 
 IMAGE_UNAVAILABLE_MESSAGE = (
@@ -118,8 +133,13 @@ class BalatroCoach:
         rag_query = self._build_rag_query(user_message, game_state, additional_game_states)
         context_chunks = self._retriever.retrieve(rag_query, top_k=settings.retrieval_top_k)
         rag_context = _format_context(context_chunks)
-        hand_eval_note = build_hand_eval_note_from_text(user_message)
-        hand_eval_summary = build_hand_eval_summary_from_text(user_message)
+        level_overrides = {
+            hs["name"]: hs["level"]
+            for hs in (hand_settings or [])
+            if hs.get("level", 1) > 1
+        }
+        hand_eval_note = build_hand_eval_note_from_text(user_message, level_overrides=level_overrides)
+        hand_eval_summary = build_hand_eval_summary_from_text(user_message, level_overrides=level_overrides)
 
         if hand_eval_summary:
             yield f"{hand_eval_summary}\n\n"
@@ -135,6 +155,7 @@ class BalatroCoach:
             allow_image=False,
             cv_failure_reason=cv_failure_reason,
             hand_settings=hand_settings,
+            level_overrides=level_overrides,
         )
 
         history_messages = self._sanitize_history(history or [])
@@ -162,6 +183,7 @@ class BalatroCoach:
                     allow_image=True,
                     cv_failure_reason=cv_failure_reason,
                     hand_settings=hand_settings,
+                    level_overrides=level_overrides,
                 )
                 active_messages = [*messages, {"role": "user", "content": content_with_image}]
             try:
@@ -333,6 +355,7 @@ class BalatroCoach:
         allow_image: bool,
         cv_failure_reason: str | None,
         hand_settings: list[dict] | None,
+        level_overrides: dict[str, int] | None = None,
     ) -> list[dict]:
         user_content: list[dict] = []
         user_content.append({"type": "text", "text": f"{RULES_GUARDRAILS_NOTE}\n"})
@@ -384,7 +407,7 @@ class BalatroCoach:
                     ),
                 }
             )
-        summary = build_hand_eval_summary_from_text(user_message)
+        summary = build_hand_eval_summary_from_text(user_message, level_overrides=level_overrides)
         if summary:
             user_content.append({"type": "text", "text": summary})
         user_content.append({"type": "text", "text": user_message})
