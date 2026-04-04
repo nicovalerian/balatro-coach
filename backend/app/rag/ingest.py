@@ -139,6 +139,33 @@ STRATEGY_GUIDES = [
             "6) Avoid anti-synergy pivots that reduce immediate clear probability."
         ),
     },
+    {
+        "name": "Planet card scaling tiers and hand strategy",
+        "text": (
+            "# Planet Card Scaling Tiers and Hand Strategy\n\n"
+            "## Straight-family (Straight, Straight Flush)\n"
+            "Exceptional planet scaling (+30 chips/+3 mult per level for Straight; +40/+4 for Straight Flush). "
+            "Viable to take enabler jokers and invest heavily in planets. "
+            "Retriggers are hard to enable on Straights, making Ante 12+ difficult; plan exit strategy early.\n\n"
+            "## Full House family (Full House, Flush House)\n"
+            "Slightly weaker scaling than Straight (+25/+2 for Full House) but often easier to construct. "
+            "Flush House's planet (Ceres, +40/+4) matches Straight Flush strength — "
+            "single-suit deck enables this without losing much scaling. "
+            "Flush House's planet card is secret (not labeled), making it harder to plan leveling before pivoting.\n\n"
+            "## Naked Flush\n"
+            "Garbage base scaling (+15 chips/+2 mult per level) — worse than Three of a Kind. "
+            "Requires high-scoring xMult jokers to compensate. "
+            "Note: when Flush is paired with a ranked hand (Straight Flush, Flush House, Flush Five), "
+            "the Flush component inherits that hand's stronger scaling.\n\n"
+            "## Minor hands (Two Pair and below)\n"
+            "Even worse scaling than naked Flush. Needs very strong jokers plus Steel cards and retrigger stacking. "
+            "Missing planets is not catastrophic but still helps — grab them when free or cheap.\n\n"
+            "## General guidance\n"
+            "Prioritize planet cards for your primary scoring hand. "
+            "High-level hands compound fast: a Straight at level 5 has 150 chips x 16 mult base before any card chips. "
+            "Tracking times-played helps estimate how many planets you've likely consumed."
+        ),
+    },
 ]
 
 
