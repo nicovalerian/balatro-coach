@@ -68,6 +68,31 @@ HAND_BASE = {
     "Flush Five": (160, 16),
 }
 
+# chips_per_level, mult_per_level — from Planet Cards wiki table
+HAND_LEVEL_SCALING: dict[str, tuple[int, int]] = {
+    "High Card":        (10, 1),
+    "Pair":             (15, 1),
+    "Two Pair":         (20, 1),
+    "Three of a Kind":  (20, 2),
+    "Straight":         (30, 3),
+    "Flush":            (15, 2),
+    "Full House":       (25, 2),
+    "Four of a Kind":   (30, 3),
+    "Straight Flush":   (40, 4),
+    "Royal Flush":      (40, 4),
+    "Five of a Kind":   (35, 3),
+    "Flush House":      (40, 4),
+    "Flush Five":       (50, 3),
+}
+
+
+def compute_hand_stats(name: str, level: int) -> tuple[int, int]:
+    """Return (chips, mult) for the given hand at the given level (1-based)."""
+    base_chips, base_mult = HAND_BASE[name]
+    chips_per_lvl, mult_per_lvl = HAND_LEVEL_SCALING.get(name, (0, 0))
+    bonus = max(0, level - 1)
+    return base_chips + bonus * chips_per_lvl, base_mult + bonus * mult_per_lvl
+
 HAND_PRIORITY = {
     "High Card": 1,
     "Pair": 2,
