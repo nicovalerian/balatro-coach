@@ -25,10 +25,22 @@ from typing import Any
 from PIL import Image
 
 from .detector import BalatroDetector
-from .joker_names import fuzzy_match_joker
+from .edition import detect_edition
+from .joker_classifier import JokerClassifier
+from .joker_names import ALL_JOKER_NAMES, fuzzy_match_joker
 from .ocr import read_number, read_text
 
 logger = logging.getLogger(__name__)
+
+# Lazy singleton — loaded on first joker crop
+_joker_clf: JokerClassifier | None = None
+
+
+def _get_joker_classifier() -> JokerClassifier:
+    global _joker_clf
+    if _joker_clf is None:
+        _joker_clf = JokerClassifier()
+    return _joker_clf
 
 CARD_RANKS = list("A23456789") + ["10", "J", "Q", "K"]
 CARD_SUITS = ["Spades", "Hearts", "Clubs", "Diamonds"]
@@ -92,59 +104,92 @@ class StateExtractor:
         # ── Screen type heuristic ──────────────────────────────────────────────
         ui_labels = {d.label for d in ui_dets}
 
-        if "button_reroll" in ui_labels:
+        if "button_store_reroll" in ui_labels:
             state.screen_type = "shop"
         elif "button_play" in ui_labels or "button_discard" in ui_labels:
             state.screen_type = "hand"
-        elif "panel_blind" in ui_labels and "button_play" not in ui_labels:
+        elif ("button_level_select" in ui_labels or "button_level_skip" in ui_labels) and "button_play" not in ui_labels:
             state.screen_type = "blind_select"
 
         # Fallback: infer from entity types when UI buttons weren't detected
         if state.screen_type == "unknown" and entities:
             entity_labels = {d.label for d in entities}
-            shop_labels = {"card_tarot", "card_planet", "card_spectral", "card_voucher"}
-            if "card" in entity_labels:
-                # Playing-card entities only appear in the hand area
+            shop_labels = {"tarot_card", "planet_card", "spectral_card", "card_pack"}
+            if "poker_card_front" in entity_labels:
                 state.screen_type = "hand"
-            elif entity_labels & shop_labels and "card" not in entity_labels:
+            elif entity_labels & shop_labels and "poker_card_front" not in entity_labels:
                 state.screen_type = "shop"
 
         # ── Cards in hand ─────────────────────────────────────────────────────
-        card_dets = [d for d in entities if d.label == "card"]
+        card_dets = [d for d in entities if d.label == "poker_card_front"]
+        # Build a lookup: for each card_front, find the closest poker_card_description
+        desc_dets = [d for d in entities if d.label == "poker_card_description"]
         for det in sorted(card_dets, key=lambda d: d.x1):
             confidences.append(det.confidence)
-            if det.crop:
-                text = read_text(det.crop)
-                card = _parse_card_text(text)
-                state.hand.append(card)
+            # Prefer the description panel (cleaner text) over the card art
+            crop = _find_nearest_description(det, desc_dets) or det.crop
+            text = read_text(crop) if crop else ""
+            card = _parse_card_text(text)
+            card["edition"] = detect_edition(det.crop) if det.crop else "base"
+            state.hand.append(card)
 
         # ── Jokers ────────────────────────────────────────────────────────────
-        joker_dets = [d for d in entities if d.label == "card_joker"]
+        joker_dets = [d for d in entities if d.label == "joker_card"]
+        # Build a lookup: for each joker, find the closest card_description panel
+        card_desc_dets = [d for d in entities if d.label == "card_description"]
+        clf = _get_joker_classifier()
         for i, det in enumerate(sorted(joker_dets, key=lambda d: d.x1)):
             confidences.append(det.confidence)
-            raw = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
-            name = fuzzy_match_joker(raw) or raw or f"Joker {i+1}"
-            state.jokers.append({"name": name, "slot": i})
+            # 1. Visual classifier (index-based) — most accurate
+            name = clf.identify(det.crop) if det.crop else None
+            # 2. OCR on description panel or card crop — fallback
+            if name is None:
+                desc_crop = _find_nearest_description(det, card_desc_dets)
+                crop = desc_crop or det.crop
+                raw = _normalize_ocr_name(read_text(crop) if crop else "")
+                name = fuzzy_match_joker(raw) or None
+            # 3. If still unidentified, label clearly so the LLM doesn't invent stats
+            if not name:
+                name = f"Joker {i+1} (unidentified)"
+            edition = detect_edition(det.crop) if det.crop else "base"
+            state.jokers.append({"name": name, "slot": i, "edition": edition})
 
         # ── Consumables (tarot / planet / spectral) ───────────────────────────
-        for label in ("card_tarot", "card_planet", "card_spectral"):
+        label_to_type = {"tarot_card": "tarot", "planet_card": "planet", "spectral_card": "spectral"}
+        for label, ctype in label_to_type.items():
             for det in [d for d in entities if d.label == label]:
                 confidences.append(det.confidence)
-                raw = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
+                desc_crop = _find_nearest_description(det, card_desc_dets)
+                crop = desc_crop or det.crop
+                raw = _normalize_ocr_name(read_text(crop) if crop else "")
                 name = fuzzy_match_joker(raw) or raw
-                state.consumables.append({"type": label.split("_")[1], "name": name})
+                # Skip if OCR read a joker name — it's a misdetection from a nearby joker crop
+                if name in ALL_JOKER_NAMES:
+                    continue
+                state.consumables.append({"type": ctype, "name": name})
 
-        # ── UI: score panel ───────────────────────────────────────────────────
-        for det in [d for d in ui_dets if d.label == "panel_score"]:
+        # ── UI: score panels ──────────────────────────────────────────────────
+        for det in [d for d in ui_dets if d.label == "ui_score_round_score"]:
             if det.crop:
                 val = read_number(det.crop)
-                state.score["current"] = val
+                if val is not None:
+                    state.score["current"] = val
+        for det in [d for d in ui_dets if d.label == "ui_score_chips"]:
+            if det.crop:
+                val = read_number(det.crop)
+                if val is not None:
+                    state.score["chips"] = val
+        for det in [d for d in ui_dets if d.label == "ui_score_mult"]:
+            if det.crop:
+                val = read_number(det.crop)
+                if val is not None:
+                    state.score["mult"] = val
 
         # ── UI: resource panels ───────────────────────────────────────────────
         label_key = {
-            "panel_hand": "hands",
-            "panel_discard": "discards",
-            "panel_money": "money",
+            "ui_data_hands_left": "hands",
+            "ui_data_discards_left": "discards",
+            "ui_data_cash": "money",
         }
         for det in ui_dets:
             key = label_key.get(det.label)
@@ -153,25 +198,36 @@ class StateExtractor:
                 if val is not None:
                     state.resources[key] = val
 
-        # ── Blind target ──────────────────────────────────────────────────────
-        for det in [d for d in ui_dets if d.label == "panel_blind"]:
+        # ── Blind target + ante ───────────────────────────────────────────────
+        for det in [d for d in ui_dets if d.label == "ui_score_target_score"]:
             if det.crop:
                 val = read_number(det.crop)
                 if val:
                     state.blind["target"] = val
+        for det in [d for d in ui_dets if d.label == "ui_round_ante_current"]:
+            if det.crop:
+                val = read_number(det.crop)
+                if val is not None:
+                    state.ante = val
 
         # ── Shop items ────────────────────────────────────────────────────────
         if state.screen_type == "shop":
-            shop_items = [d for d in entities if d.label in (
-                "card_joker", "card_tarot", "card_planet",
-                "card_spectral", "card_voucher",
-            )]
+            shop_type_map = {
+                "joker_card": "joker",
+                "tarot_card": "tarot",
+                "planet_card": "planet",
+                "spectral_card": "spectral",
+                "card_pack": "pack",
+            }
+            shop_items = [d for d in entities if d.label in shop_type_map]
             state.shop["items"] = []
             for det in shop_items:
-                raw = _normalize_ocr_name(read_text(det.crop) if det.crop else "")
+                desc_crop = _find_nearest_description(det, card_desc_dets)
+                crop = desc_crop or det.crop
+                raw = _normalize_ocr_name(read_text(crop) if crop else "")
                 name = fuzzy_match_joker(raw) or raw
                 state.shop["items"].append({
-                    "type": det.label.split("_")[1] if "_" in det.label else det.label,
+                    "type": shop_type_map[det.label],
                     "name": name,
                 })
 
@@ -185,6 +241,18 @@ class StateExtractor:
             state.confidence = 0.0
 
         return state
+
+
+def _find_nearest_description(det: "Detection", desc_dets: list) -> "Image.Image | None":
+    """Return the crop of the description panel closest to det (by horizontal centre)."""
+    if not desc_dets:
+        return None
+    det_cx = (det.x1 + det.x2) / 2
+    best = min(desc_dets, key=lambda d: abs((d.x1 + d.x2) / 2 - det_cx))
+    # Only use it if it's reasonably close (within 10% of image width)
+    if abs((best.x1 + best.x2) / 2 - det_cx) > 0.10:
+        return None
+    return best.crop
 
 
 def _parse_card_text(text: str) -> dict:

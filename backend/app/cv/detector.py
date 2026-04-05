@@ -25,28 +25,54 @@ except ImportError:
     _ORT_AVAILABLE = False
     logger.warning("onnxruntime not installed – CV pipeline disabled")
 
-# ── label maps (from proj-airi datasets) ──────────────────────────────────────
+# ── label maps (from proj-airi v2 datasets, Sept 2025) ───────────────────────
 ENTITY_LABELS: list[str] = [
-    "card",
-    "card_joker",
-    "card_tarot",
-    "card_planet",
-    "card_spectral",
-    "card_voucher",
-    "card_stack",
+    "card_description",      # 0 – text panel below a card (good for OCR)
+    "card_pack",             # 1 – booster pack
+    "joker_card",            # 2 – joker
+    "planet_card",           # 3 – planet consumable
+    "poker_card_back",       # 4 – face-down playing card
+    "poker_card_description",# 5 – rank/suit text panel on a playing card
+    "poker_card_front",      # 6 – face-up playing card
+    "poker_card_stack",      # 7 – deck pile
+    "spectral_card",         # 8 – spectral consumable
+    "tarot_card",            # 9 – tarot consumable
 ]
 
 UI_LABELS: list[str] = [
-    "panel_score",
-    "panel_hand",
-    "panel_discard",
-    "panel_money",
-    "panel_blind",
-    "button_play",
-    "button_discard",
-    "button_reroll",
-    "joker_slot",
-    "consumable_slot",
+    "button_back",               # 0
+    "button_card_pack_skip",     # 1
+    "button_cash_out",           # 2
+    "button_discard",            # 3
+    "button_level_select",       # 4
+    "button_level_skip",         # 5
+    "button_main_menu",          # 6
+    "button_main_menu_play",     # 7
+    "button_new_run",            # 8
+    "button_new_run_play",       # 9
+    "button_options",            # 10
+    "button_play",               # 11
+    "button_purchase",           # 12
+    "button_run_info",           # 13
+    "button_sell",               # 14
+    "button_sort_hand_rank",     # 15
+    "button_sort_hand_suits",    # 16
+    "button_store_next_round",   # 17
+    "button_store_reroll",       # 18
+    "button_use",                # 19
+    "ui_card_value",             # 20
+    "ui_data_cash",              # 21
+    "ui_data_discards_left",     # 22
+    "ui_data_hands_left",        # 23
+    "ui_round_ante_current",     # 24
+    "ui_round_ante_left",        # 25
+    "ui_round_round_current",    # 26
+    "ui_round_round_left",       # 27
+    "ui_score_chips",            # 28
+    "ui_score_current",          # 29
+    "ui_score_mult",             # 30
+    "ui_score_round_score",      # 31
+    "ui_score_target_score",     # 32
 ]
 
 
@@ -61,6 +87,40 @@ class Detection:
     y2: float
     # pixel crop from original image (set later)
     crop: Image.Image | None = field(default=None, repr=False)
+
+
+def _iou(a: tuple, b: tuple) -> float:
+    """IoU between two (conf, cls, x1, y1, x2, y2) tuples."""
+    ax1, ay1, ax2, ay2 = a[2], a[3], a[4], a[5]
+    bx1, by1, bx2, by2 = b[2], b[3], b[4], b[5]
+    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+    if inter == 0:
+        return 0.0
+    a_area = (ax2 - ax1) * (ay2 - ay1)
+    b_area = (bx2 - bx1) * (by2 - by1)
+    return inter / (a_area + b_area - inter)
+
+
+def _nms(raw: list, iou_threshold: float) -> list:
+    """Greedy per-class NMS. raw items: (conf, cls, x1, y1, x2, y2)."""
+    from collections import defaultdict
+    by_class: dict[int, list] = defaultdict(list)
+    for item in raw:
+        by_class[item[1]].append(item)
+    kept = []
+    for cls_items in by_class.values():
+        cls_items.sort(key=lambda x: x[0], reverse=True)
+        suppressed = [False] * len(cls_items)
+        for i in range(len(cls_items)):
+            if suppressed[i]:
+                continue
+            kept.append(cls_items[i])
+            for j in range(i + 1, len(cls_items)):
+                if not suppressed[j] and _iou(cls_items[i], cls_items[j]) > iou_threshold:
+                    suppressed[j] = True
+    return kept
 
 
 class YOLODetector:
@@ -82,8 +142,8 @@ class YOLODetector:
         )
         self._input_name = self._session.get_inputs()[0].name
 
-    def detect(self, image: Image.Image, conf_threshold: float = 0.25) -> list[Detection]:
-        """Run inference and return detections above conf_threshold."""
+    def detect(self, image: Image.Image, conf_threshold: float = 0.25, iou_threshold: float = 0.65) -> list[Detection]:
+        """Run inference and return detections above conf_threshold, after NMS."""
         orig_w, orig_h = image.size
         resized = image.resize((self._input_size, self._input_size), Image.BILINEAR)
         arr = np.array(resized, dtype=np.float32) / 255.0
@@ -93,7 +153,7 @@ class YOLODetector:
         # YOLO11 output: [1, num_classes+4, num_anchors]
         pred = outputs[0][0].T  # (num_anchors, 4+num_classes)
 
-        detections: list[Detection] = []
+        raw: list[tuple[float, int, float, float, float, float]] = []
         for row in pred:
             x_c, y_c, w, h = row[:4]
             class_scores = row[4:]
@@ -101,27 +161,22 @@ class YOLODetector:
             conf = float(class_scores[cls])
             if conf < conf_threshold:
                 continue
-            # convert cx,cy,w,h (normalised to input size) → xyxy normalised to orig
-            x1 = (x_c - w / 2) / self._input_size
-            y1 = (y_c - h / 2) / self._input_size
-            x2 = (x_c + w / 2) / self._input_size
-            y2 = (y_c + h / 2) / self._input_size
-            x1, y1, x2, y2 = max(0, x1), max(0, y1), min(1, x2), min(1, y2)
+            x1 = max(0.0, (x_c - w / 2) / self._input_size)
+            y1 = max(0.0, (y_c - h / 2) / self._input_size)
+            x2 = min(1.0, (x_c + w / 2) / self._input_size)
+            y2 = min(1.0, (y_c + h / 2) / self._input_size)
+            raw.append((conf, cls, x1, y1, x2, y2))
 
-            # pixel crop
+        # Per-class greedy NMS
+        kept = _nms(raw, iou_threshold)
+
+        detections: list[Detection] = []
+        for conf, cls, x1, y1, x2, y2 in kept:
             px1, py1 = int(x1 * orig_w), int(y1 * orig_h)
             px2, py2 = int(x2 * orig_w), int(y2 * orig_h)
             crop = image.crop((px1, py1, px2, py2)) if px2 > px1 and py2 > py1 else None
-
             label = self._labels[cls] if cls < len(self._labels) else f"cls_{cls}"
-            detections.append(
-                Detection(
-                    label=label,
-                    confidence=conf,
-                    x1=x1, y1=y1, x2=x2, y2=y2,
-                    crop=crop,
-                )
-            )
+            detections.append(Detection(label=label, confidence=conf, x1=x1, y1=y1, x2=x2, y2=y2, crop=crop))
         return detections
 
 

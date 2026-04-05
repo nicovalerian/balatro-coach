@@ -14,9 +14,10 @@ class Settings(BaseSettings):
 
     model_access_key: str
     inference_base_url: str = "https://inference.do-ai.run/v1"
-    model: str = "openai-gpt-oss-120b"
-    model_fallbacks: str = "nvidia-nemotron-3-super-120b,llama3.3-70b-instruct,glm-5"
+    model: str = "alibaba-qwen3-32b"
+    model_fallbacks: str = "kimi-k2.5,minimax-m2.5,glm-5"
     synergy_model: str = "anthropic-claude-3.5-haiku"
+    stream_chunk_timeout: int = 60  # seconds; OpenAI client read timeout per chunk
 
     # CV
     entities_model_path: Path = ROOT / "models" / "entities.onnx"

@@ -19,6 +19,10 @@ backend/models/*.onnx
 backend/data/chroma/
 backend/data/*.jsonl
 
+# Joker classifier artifacts (rebuilt via scripts/build_joker_index.py)
+backend/data/joker_sprites/
+backend/data/joker_index.npz
+
 # Node
 node_modules/
 frontend/dist/

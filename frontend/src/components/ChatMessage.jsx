@@ -95,14 +95,13 @@ export default function ChatMessage({
           ) : null}
 
           {showLoader ? (
-            <div className="flex items-center gap-3">
-              <span className="card-loader" aria-hidden="true" />
-              <div>
-                <p className="pixel-font text-[13px] text-[#f2c237]">Reading The Table</p>
-                <p className="terminal-copy mt-1 text-[12px] text-[#d0d8d3]">
-                  Checking blind pressure, score lines, and joker order.
-                </p>
+            <div className="flex items-center gap-3 py-1">
+              <div className="thinking-dots" aria-hidden="true">
+                <span className="thinking-dot" />
+                <span className="thinking-dot" />
+                <span className="thinking-dot" />
               </div>
+              <p className="pixel-font text-[12px] text-[#f2c237]">Reading The Table</p>
             </div>
           ) : isUser ? (
             <p className="terminal-copy whitespace-pre-wrap text-[13px] leading-6 text-inherit">
@@ -144,13 +143,13 @@ export default function ChatMessage({
                       </pre>
                     ),
                   h1: ({ children }) => (
-                    <h1 className="pixel-font mb-3 text-[18px] text-[#f2c237]">{children}</h1>
+                    <h1 className="pixel-font mt-5 mb-3 text-[18px] text-[#f2c237]">{children}</h1>
                   ),
                   h2: ({ children }) => (
-                    <h2 className="pixel-font mb-3 text-[16px] text-[#4ade80]">{children}</h2>
+                    <h2 className="pixel-font mt-4 mb-3 text-[16px] text-[#4ade80]">{children}</h2>
                   ),
                   h3: ({ children }) => (
-                    <h3 className="pixel-font mb-2 text-[14px] text-[#8ac9ff]">{children}</h3>
+                    <h3 className="pixel-font mt-3 mb-2 text-[14px] text-[#8ac9ff]">{children}</h3>
                   ),
                   blockquote: ({ children }) => (
                     <blockquote className="mb-3 border-l-2 border-[#3498db] pl-4 text-[#dceeff]">
@@ -181,10 +180,7 @@ export default function ChatMessage({
               </ReactMarkdown>
 
               {streaming ? (
-                <div className="mt-3 flex items-center gap-2 text-[#f2c237]">
-                  <span className="card-loader scale-75" aria-hidden="true" />
-                  <span className="pixel-font text-[11px]">Building Response</span>
-                </div>
+                <span className="streaming-cursor" aria-hidden="true" />
               ) : null}
             </div>
           )}

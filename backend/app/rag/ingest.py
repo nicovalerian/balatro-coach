@@ -141,6 +141,81 @@ STRATEGY_GUIDES = [
         ),
     },
     {
+        "name": "Deck mechanics – what discarding does and does not do",
+        "text": (
+            "# Deck Mechanics – Discarding and Deck Size\n\n"
+            "## Discarding does NOT thin the deck\n"
+            "Discarding cards during a hand does NOT remove them from your deck permanently. "
+            "Discarded cards return to the draw pool — the full deck resets every round (blind). "
+            "Never advise a player to 'discard to thin the deck' as a strategy, because it has no such effect.\n\n"
+            "## How to actually thin the deck\n"
+            "The only ways to permanently remove cards from your deck are:\n"
+            "- Selling The Fool tarot card (removes 2 cards permanently from the deck)\n"
+            "- Using certain spectral cards (e.g. Ectoplasm, Hex) which remove cards\n"
+            "- Some joker effects on trigger (e.g. Burnt Joker destroys played cards on scoring)\n"
+            "- The 'Card Removal' voucher mechanic is not available — cards are removed only via explicit effects\n\n"
+            "## Why deck thinning matters\n"
+            "A smaller deck concentrates key cards: you draw your best scoring cards more often per hand. "
+            "Thin decks synergize with Flush-family hands (need 5 of same suit) and set up reliable "
+            "Four of a Kind / Flush Five combos. However, small decks also reduce hand-size flexibility "
+            "and can leave you card-starved on long blinds.\n\n"
+            "## Discard uses that ARE valid\n"
+            "- Drawing into a better 5-card hand (shuffle for scoring cards)\n"
+            "- Activating discard-triggered jokers (e.g. Riff-Raff, Green Joker loses mult on discard)\n"
+            "- Cycling to find steel/gold cards already in hand\n"
+            "Never waste discards unless you have a concrete hand improvement or discard-trigger synergy."
+        ),
+    },
+    {
+        "name": "Early game priorities – Ante 1 and 2",
+        "text": (
+            "# Early Game Priorities – Ante 1 and 2\n\n"
+            "## Goal\n"
+            "Survive Ante 1 and 2 with economy intact while establishing a scaling direction.\n\n"
+            "## Ante 1 — Foundation\n"
+            "- Play your highest base-scoring hand reliably. Don't chase speculative hands.\n"
+            "- The small/big blinds are easy; focus on preserving hands and discards for the boss.\n"
+            "- First joker purchase: prioritize universally applicable (e.g. Joker, Jolly Joker) "
+            "over narrow build-specific jokers until you know what hand type you're building around.\n"
+            "- Skipping small blind (for a free tag) is often worth it — you lose $1-2 reward but "
+            "gain a tag (extra joker slot, card removal, etc.). Skip if the boss blind is low-pressure.\n\n"
+            "## Ante 2 — Direction\n"
+            "- By Ante 2 you should know your primary scoring hand (Pair, Flush, Straight, etc.).\n"
+            "- Invest planet cards into that hand type only. Don't spread planets across multiple hands.\n"
+            "- Build toward $5 interest breakpoints ($5, $10, $15, $20, $25): each breakpoint is $1/round.\n"
+            "- Don't reroll Ante 1/2 shops unless you have excess money or a clear must-have joker.\n\n"
+            "## Skip decisions\n"
+            "- Skip blinds only when the reward (tag) outweighs the lost blind money.\n"
+            "- Common value skips: Negative Tag (extra joker slot), Foil/Holo/Poly Tag, Card Removal.\n"
+            "- Never skip if you need the blind score to stay in economy for interest breakpoints.\n"
+            "- Boss blinds CANNOT be skipped — always plan a boss clear line."
+        ),
+    },
+    {
+        "name": "Mid game scaling and shop discipline",
+        "text": (
+            "# Mid Game Scaling – Ante 3 through 6\n\n"
+            "## Goal\n"
+            "Lock in a scaling engine and compound it. Blind scores grow fast; linear jokers stop working.\n\n"
+            "## What to look for in shops\n"
+            "- xMult jokers (Blueprint, Brainstorm, Hologram, DNA) scale multiplicatively — worth more than flat +mult.\n"
+            "- Vouchers that reduce card costs or add joker slots amplify every future shop visit.\n"
+            "- Spectral cards (Foil, Holographic, Polychrome) on a key joker are often worth the deck slot.\n\n"
+            "## Interest vs. spending\n"
+            "Interest caps at $25 ($5/round max). Value of holding $25 is 5x the value of holding $5. "
+            "Breaking from $20 to $15 costs you $1/round for every round after — only worth it for "
+            "a joker that produces >$1/round in value or that solves an immediate scaling problem.\n\n"
+            "## Joker slot management\n"
+            "- 5 joker slots by default; Negative Tag or Joker Stencil can expand effectively.\n"
+            "- Audit each joker every 2 antes: is it still contributing to your scoring line?\n"
+            "- Sell jokers that no longer trigger on your primary hand type.\n\n"
+            "## Deck composition mid game\n"
+            "- Consider removing low-value cards (2s, 3s unless suit-locked) to increase draw density.\n"
+            "- Steel cards (held-in-hand xMult) and Gold cards (end-of-round $) add passive value.\n"
+            "- If playing Flush, confirm your suit distribution — too many off-suit cards reduce consistency."
+        ),
+    },
+    {
         "name": "Planet card scaling tiers and hand strategy",
         "text": (
             "# Planet Card Scaling Tiers and Hand Strategy\n\n"

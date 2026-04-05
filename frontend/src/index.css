@@ -206,7 +206,7 @@
   }
 
   .status-live .status-light {
-    animation: status-pulse 1.35s steps(2, end) infinite;
+    animation: status-pulse 1.8s ease-in-out infinite;
   }
 
   .action-button {
@@ -394,7 +394,7 @@
   }
 
   .terminal-textarea {
-    min-height: 64px;
+    min-height: 52px;
     border: 2px solid rgba(242, 194, 55, 0.7);
     border-radius: 18px;
     background: rgba(8, 12, 10, 0.82);
@@ -485,7 +485,70 @@
   }
 
   .message-enter {
-    animation: message-deal 240ms ease-out both;
+    animation: message-deal 280ms cubic-bezier(0.22, 0.8, 0.46, 1) both;
+  }
+
+  .streaming-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 0.85em;
+    background: #8ac9ff;
+    margin-left: 3px;
+    border-radius: 1px;
+    vertical-align: text-bottom;
+    animation: cursor-blink 1.05s step-end infinite;
+  }
+
+  .thinking-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .thinking-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #f2c237;
+    animation: dot-rise 1.5s ease-in-out infinite;
+  }
+
+  .thinking-dot:nth-child(2) {
+    animation-delay: 0.18s;
+    background: #8ac9ff;
+  }
+
+  .thinking-dot:nth-child(3) {
+    animation-delay: 0.36s;
+    background: #4ade80;
+  }
+
+  .btn-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 15%,
+      rgba(255, 255, 255, 0.22) 50%,
+      transparent 85%
+    );
+    animation: shimmer-sweep 1.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .app-enter {
+    animation: app-enter 360ms cubic-bezier(0.22, 0.8, 0.46, 1) both;
+  }
+
+  .app-enter-delayed {
+    animation: app-enter 360ms cubic-bezier(0.22, 0.8, 0.46, 1) both;
+    animation-delay: 80ms;
   }
 
   .suit-pattern {
@@ -526,11 +589,14 @@
 @keyframes message-deal {
   0% {
     opacity: 0;
-    transform: translateY(14px) scale(0.98);
+    transform: perspective(500px) translateY(18px) rotateX(6deg) scale(0.985);
+  }
+  55% {
+    opacity: 1;
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: perspective(500px) translateY(0) rotateX(0deg) scale(1);
   }
 }
 
@@ -538,11 +604,11 @@
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 10px rgba(138, 247, 200, 0.6);
+    box-shadow: 0 0 12px rgba(138, 247, 200, 0.7);
   }
   50% {
-    opacity: 0.45;
-    box-shadow: 0 0 4px rgba(138, 247, 200, 0.3);
+    opacity: 0.28;
+    box-shadow: 0 0 3px rgba(138, 247, 200, 0.15);
   }
 }
 
@@ -552,5 +618,48 @@
   }
   100% {
     transform: translateY(8px);
+  }
+}
+
+@keyframes cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes dot-rise {
+  0%,
+  75%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  35% {
+    transform: translateY(-7px);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(110%);
+  }
+}
+
+@keyframes app-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.993);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }

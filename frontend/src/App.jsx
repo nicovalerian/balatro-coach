@@ -144,8 +144,14 @@ function SidebarPanel({ gameState, handSettings, updateHandSetting, mobile = fal
 function EmptyChatState() {
   return (
     <section className="space-y-3 pb-2">
-      {STARTER_MESSAGES.map((message) => (
-        <ChatMessage key={message.id} role={message.role} content={message.content} />
+      {STARTER_MESSAGES.map((message, index) => (
+        <div
+          key={message.id}
+          className="message-enter"
+          style={{ animationDelay: `${index * 0.1 + 0.15}s` }}
+        >
+          <ChatMessage role={message.role} content={message.content} />
+        </div>
       ))}
     </section>
   );
@@ -207,7 +213,7 @@ export default function App() {
           )}
         >
           {sidebarVisible ? (
-            <div className="terminal-shell h-full overflow-hidden">
+            <div className="terminal-shell app-enter h-full overflow-hidden">
               <SidebarPanel
                 gameState={gameState}
                 handSettings={handSettings}
@@ -217,7 +223,7 @@ export default function App() {
           ) : null}
         </aside>
 
-        <main className="terminal-shell flex min-w-0 flex-1 flex-col overflow-hidden xl:h-full">
+        <main className="terminal-shell app-enter-delayed flex min-w-0 flex-1 flex-col overflow-hidden xl:h-full">
           <header className="border-b border-white/10 bg-black/25 px-4 py-4 sm:px-6">
             <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between gap-4 xl:max-w-none">
               <div className="flex min-w-0 items-center gap-3 sm:gap-4">
@@ -325,27 +331,10 @@ export default function App() {
               </div>
             </ScrollArea>
 
-            <div className="border-t border-white/10 bg-gradient-to-t from-black/35 to-transparent px-3 pb-3 pt-2 sm:px-5 lg:px-8 lg:pb-4">
+            <div className="border-t border-white/10 bg-gradient-to-t from-black/35 to-transparent px-3 pb-3 pt-2 sm:px-5 lg:px-8">
               <div className="mx-auto max-w-[980px]">
-                <div className="composer-shell p-2.5 sm:p-3">
-                  <div className="flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="pixel-font text-[16px] text-primary">Question</p>
-                        <p className="terminal-copy mt-1 text-[12px] text-[#d0d8d3]">
-                          Type what you want analyzed, then add screenshots if needed.
-                        </p>
-                      </div>
-                      {imageFiles.length > 0 ? (
-                        <span className="status-pill">
-                          <span className="status-light" />
-                          <span className="pixel-font text-[11px] text-white">
-                            {imageFiles.length} screenshot{imageFiles.length > 1 ? "s" : ""}
-                          </span>
-                        </span>
-                      ) : null}
-                    </div>
-
+                <div className="composer-shell p-2">
+                  <div className="flex flex-col gap-2">
                     <div className="question-shell p-2">
                       <Textarea
                         ref={textareaRef}
@@ -359,101 +348,94 @@ export default function App() {
                       />
                     </div>
 
-                    <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-                      <div className="space-y-2">
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <button
-                            type="button"
-                            className="dropdown-toggle"
-                            onClick={() => setAttachmentsOpen((value) => !value)}
-                            aria-expanded={attachmentsOpen}
-                          >
-                            <span className="flex items-center gap-2">
-                              <span className="pixel-font text-[12px] text-[#f2c237]">
-                                Screenshots
-                              </span>
-                              {imageFiles.length > 0 ? (
-                                <span className="dropdown-count">
-                                  {imageFiles.length}
-                                </span>
-                              ) : null}
-                            </span>
-                            <ChevronDown
-                              className={cn(
-                                "h-4 w-4 transition-transform duration-200",
-                                attachmentsOpen && "rotate-180"
-                              )}
-                            />
-                          </button>
-
-                          <button
-                            type="button"
-                            className="dropdown-toggle"
-                            onClick={() => setPromptsOpen((value) => !value)}
-                            aria-expanded={promptsOpen}
-                          >
-                            <span className="pixel-font text-[12px] text-[#d9e6f2]">
-                              Quick Prompts
-                            </span>
-                            <ChevronDown
-                              className={cn(
-                                "h-4 w-4 transition-transform duration-200",
-                                promptsOpen && "rotate-180"
-                              )}
-                            />
-                          </button>
-                        </div>
-
-                        <div
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="dropdown-toggle"
+                        onClick={() => setAttachmentsOpen((value) => !value)}
+                        aria-expanded={attachmentsOpen}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className="pixel-font text-[12px] text-[#f2c237]">
+                            Screenshots
+                          </span>
+                          {imageFiles.length > 0 ? (
+                            <span className="dropdown-count">{imageFiles.length}</span>
+                          ) : null}
+                        </span>
+                        <ChevronDown
                           className={cn(
-                            "expandable-section",
-                            attachmentsOpen && "expandable-section-open"
+                            "h-4 w-4 transition-transform duration-200",
+                            attachmentsOpen && "rotate-180"
                           )}
-                        >
-                          <div className="expandable-inner">
-                            <ImageUploader
-                              files={imageFiles}
-                              onFilesChange={setImageFiles}
-                              disabled={isLoading}
-                            />
-                          </div>
-                        </div>
+                        />
+                      </button>
 
-                        <div
+                      <button
+                        type="button"
+                        className="dropdown-toggle"
+                        onClick={() => setPromptsOpen((value) => !value)}
+                        aria-expanded={promptsOpen}
+                      >
+                        <span className="pixel-font text-[12px] text-[#d9e6f2]">
+                          Quick Prompts
+                        </span>
+                        <ChevronDown
                           className={cn(
-                            "expandable-section",
-                            promptsOpen && "expandable-section-open"
+                            "h-4 w-4 transition-transform duration-200",
+                            promptsOpen && "rotate-180"
                           )}
-                        >
-                          <div className="expandable-inner">
-                            <div className="flex flex-wrap gap-1.5">
-                              {QUICK_PROMPTS.map((prompt) => (
-                                <PromptButton
-                                  key={prompt}
-                                  prompt={prompt}
-                                  onClick={handlePrompt}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                        />
+                      </button>
+
+                      <div className="flex-1" />
 
                       <Button
                         type="button"
-                        className="action-button action-button-primary min-h-[48px] min-w-[120px] px-4 lg:mt-[2px]"
+                        className={cn(
+                          "action-button action-button-primary min-h-[36px] min-w-[100px] px-4",
+                          isLoading && "btn-shimmer"
+                        )}
                         onClick={handleSend}
                         disabled={isLoading || (!input.trim() && imageFiles.length === 0)}
                       >
-                        <Send className="mr-2 h-4 w-4" />
+                        <Send className="mr-2 h-3.5 w-3.5" />
                         {isLoading ? "Sending" : "Send"}
                       </Button>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="terminal-copy text-[11px] text-[#a6b1aa]">
-                        Enter to send. Shift+Enter for newline. Paste screenshots with Ctrl+V.
-                      </p>
+                    <div
+                      className={cn(
+                        "expandable-section",
+                        attachmentsOpen && "expandable-section-open"
+                      )}
+                    >
+                      <div className="expandable-inner pt-1">
+                        <ImageUploader
+                          files={imageFiles}
+                          onFilesChange={setImageFiles}
+                          disabled={isLoading}
+                        />
+                      </div>
+                    </div>
+
+                    <div
+                      className={cn(
+                        "expandable-section",
+                        promptsOpen && "expandable-section-open"
+                      )}
+                    >
+                      <div className="expandable-inner pt-1">
+                        <div className="flex flex-wrap gap-1.5">
+                          {QUICK_PROMPTS.map((prompt) => (
+                            <PromptButton
+                              key={prompt}
+                              prompt={prompt}
+                              onClick={handlePrompt}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

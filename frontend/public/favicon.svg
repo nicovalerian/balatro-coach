@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Card body -->
+  <rect x="1.5" y="1.5" width="29" height="29" rx="5.5"
+        fill="#0d1612" stroke="#f2c237" stroke-width="1.5"/>
+
+  <!-- Subtle inner highlight -->
+  <rect x="3" y="3" width="26" height="26" rx="4"
+        fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+  <!-- ♠ top-left — light silver -->
+  <text x="9" y="15" text-anchor="middle" dominant-baseline="auto"
+        font-size="12" font-family="monospace, sans-serif" fill="#c8d4ce">♠</text>
+
+  <!-- ♥ top-right — red -->
+  <text x="23" y="15" text-anchor="middle" dominant-baseline="auto"
+        font-size="12" font-family="monospace, sans-serif" fill="#e43f3f">♥</text>
+
+  <!-- ♣ bottom-left — green -->
+  <text x="9" y="27" text-anchor="middle" dominant-baseline="auto"
+        font-size="12" font-family="monospace, sans-serif" fill="#4ade80">♣</text>
+
+  <!-- ♦ bottom-right — blue -->
+  <text x="23" y="27" text-anchor="middle" dominant-baseline="auto"
+        font-size="12" font-family="monospace, sans-serif" fill="#3498db">♦</text>
+</svg>

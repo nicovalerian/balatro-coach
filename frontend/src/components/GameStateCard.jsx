@@ -104,14 +104,37 @@ export default function GameStateCard({ state, handSettings, updateHandSetting }
         open={openSections.jokers}
         onToggle={() => toggleSection("jokers")}
       >
-        <ul className="space-y-2">
-          {synergyTargets.map((item) => (
-            <li key={item} className="terminal-copy flex gap-2 text-[12px] leading-6 text-[#d6e8ff]">
-              <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#3498db]" />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
+        {(state.jokers ?? []).length > 0 ? (
+          <ul className="mb-3 space-y-1">
+            {(state.jokers ?? []).map((joker, i) => (
+              <li key={i} className="terminal-copy flex items-center gap-2 text-[12px] leading-6">
+                <span className="mt-[1px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#f2c237]" />
+                <span className="text-[#edf2ef]">{joker.name ?? "Unknown Joker"}</span>
+                {joker.edition && joker.edition !== "base" ? (
+                  <span className={[
+                    "pixel-font rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                    joker.edition === "foil"         ? "bg-[#4a90d9]/30 text-[#89c4f4]" : "",
+                    joker.edition === "holographic"  ? "bg-[#9b59b6]/30 text-[#d7aefb]" : "",
+                    joker.edition === "polychrome"   ? "bg-[#e67e22]/30 text-[#ffb347]" : "",
+                    joker.edition === "negative"     ? "bg-white/10 text-[#c8d4ce]"     : "",
+                  ].join(" ")}>
+                    {joker.edition}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {synergyTargets.length > 0 ? (
+          <ul className="space-y-2">
+            {synergyTargets.map((item) => (
+              <li key={item} className="terminal-copy flex gap-2 text-[12px] leading-6 text-[#d6e8ff]">
+                <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#3498db]" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </Section>
 
       <Section

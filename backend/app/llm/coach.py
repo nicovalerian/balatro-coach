@@ -106,7 +106,11 @@ IMAGE_UNAVAILABLE_MESSAGE = (
 class BalatroCoach:
     def __init__(self, retriever: RAGRetriever):
         base_url = settings.inference_base_url.rstrip("/") + "/"
-        self._client = OpenAI(api_key=settings.model_access_key, base_url=base_url)
+        self._client = OpenAI(
+            api_key=settings.model_access_key,
+            base_url=base_url,
+            timeout=float(settings.stream_chunk_timeout),
+        )
         self._retriever = retriever
         self._models = self._build_model_candidates()
         self._vision_models = self._build_vision_model_allowlist()
@@ -328,9 +332,8 @@ class BalatroCoach:
         for model_name in fallbacks:
             if model_name not in candidates:
                 candidates.append(model_name)
-        # Some provider models are currently too unreliable in this integration
-        # (empty stream/content under normal requests). Keep them as tail fallbacks.
-        deprioritized = {"minimax-m2.5", "glm-5"}
+        # Public-preview models with known empty-stream issues go last.
+        deprioritized = {"minimax-m2.5", "glm-5", "kimi-k2.5"}
         stable_first = [m for m in candidates if m not in deprioritized]
         unstable_tail = [m for m in candidates if m in deprioritized]
         ordered = stable_first + unstable_tail
