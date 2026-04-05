@@ -24,7 +24,7 @@ from typing import Any
 
 from PIL import Image
 
-from .detector import BalatroDetector
+from .detector import BalatroDetector, Detection
 from .edition import detect_edition
 from .joker_classifier import JokerClassifier
 from .joker_names import ALL_JOKER_NAMES, fuzzy_match_joker
@@ -243,7 +243,7 @@ class StateExtractor:
         return state
 
 
-def _find_nearest_description(det: "Detection", desc_dets: list) -> "Image.Image | None":
+def _find_nearest_description(det: Detection, desc_dets: list) -> Image.Image | None:
     """Return the crop of the description panel closest to det (by horizontal centre)."""
     if not desc_dets:
         return None
