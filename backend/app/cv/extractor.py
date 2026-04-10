@@ -72,6 +72,7 @@ class GameState:
     resources: dict = field(default_factory=dict)
     blind: dict = field(default_factory=dict)
     ante: int | None = None
+    round: int | None = None
     shop: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -86,6 +87,7 @@ class GameState:
             "resources": self.resources,
             "blind": self.blind,
             "ante": self.ante,
+            "round": self.round,
             "shop": self.shop,
         }
 
@@ -134,19 +136,25 @@ class StateExtractor:
 
         # ── Jokers ────────────────────────────────────────────────────────────
         joker_dets = [d for d in entities if d.label == "joker_card"]
+        # Deduplicate: remove detections whose horizontal centre is within 6%
+        # of a higher-confidence detection (handles NMS near-misses).
+        joker_dets = _deduplicate_by_center(joker_dets, x_threshold=0.06)
         # Build a lookup: for each joker, find the closest card_description panel
         card_desc_dets = [d for d in entities if d.label == "card_description"]
         clf = _get_joker_classifier()
         for i, det in enumerate(sorted(joker_dets, key=lambda d: d.x1)):
             confidences.append(det.confidence)
-            # 1. Visual classifier (index-based) — most accurate
+            # 1. Visual classifier (index-based)
             name = clf.identify(det.crop) if det.crop else None
             # 2. OCR on description panel or card crop — fallback
             if name is None:
                 desc_crop = _find_nearest_description(det, card_desc_dets)
                 crop = desc_crop or det.crop
                 raw = _normalize_ocr_name(read_text(crop) if crop else "")
-                name = fuzzy_match_joker(raw) or None
+                # Use a higher cutoff than the default (0.72) to avoid false
+                # matches on the generic "JOKER" frame text that appears on
+                # every card; only specific strings like "YORICK" score high.
+                name = fuzzy_match_joker(raw, cutoff=0.85) or None
             # 3. If still unidentified, label clearly so the LLM doesn't invent stats
             if not name:
                 name = f"Joker {i+1} (unidentified)"
@@ -161,9 +169,16 @@ class StateExtractor:
                 desc_crop = _find_nearest_description(det, card_desc_dets)
                 crop = desc_crop or det.crop
                 raw = _normalize_ocr_name(read_text(crop) if crop else "")
-                name = fuzzy_match_joker(raw) or raw
-                # Skip if OCR read a joker name — it's a misdetection from a nearby joker crop
+                name = fuzzy_match_joker(raw, cutoff=0.85) or raw
                 if name in ALL_JOKER_NAMES:
+                    # YOLO misclassified a joker (e.g. hovered joker with description
+                    # panel) as a tarot card. Redirect it to the joker list instead.
+                    y_center = (det.y1 + det.y2) / 2
+                    if y_center < 0.40:   # upper screen area = joker row
+                        slot = len(state.jokers)
+                        edition = detect_edition(det.crop) if det.crop else "base"
+                        state.jokers.append({"name": name, "slot": slot, "edition": edition})
+                    # Either way, don't add it as a consumable
                     continue
                 state.consumables.append({"type": ctype, "name": name})
 
@@ -197,7 +212,7 @@ class StateExtractor:
                 if val is not None:
                     state.resources[key] = val
 
-        # ── Blind target + ante ───────────────────────────────────────────────
+        # ── Blind target + ante + round ───────────────────────────────────────
         for det in [d for d in ui_dets if d.label == "ui_score_target_score"]:
             if det.crop:
                 val = read_number(det.crop)
@@ -208,6 +223,11 @@ class StateExtractor:
                 val = read_number(det.crop)
                 if val is not None:
                     state.ante = val
+        for det in [d for d in ui_dets if d.label == "ui_round_round_current"]:
+            if det.crop:
+                val = read_number(det.crop)
+                if val is not None:
+                    state.round = val
 
         # ── Shop items ────────────────────────────────────────────────────────
         if state.screen_type == "shop":
@@ -240,6 +260,21 @@ class StateExtractor:
             state.confidence = 0.0
 
         return state
+
+
+def _deduplicate_by_center(dets: list, x_threshold: float = 0.06) -> list:
+    """
+    Remove lower-confidence detections whose horizontal centre overlaps with
+    a higher-confidence detection.  Handles NMS near-misses where two slightly
+    different bounding boxes survive for the same physical object.
+    """
+    sorted_dets = sorted(dets, key=lambda d: d.confidence, reverse=True)
+    kept: list = []
+    for det in sorted_dets:
+        cx = (det.x1 + det.x2) / 2
+        if not any(abs(cx - (k.x1 + k.x2) / 2) < x_threshold for k in kept):
+            kept.append(det)
+    return kept
 
 
 def _find_nearest_description(det: Detection, desc_dets: list) -> Image.Image | None:
