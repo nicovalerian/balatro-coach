@@ -47,7 +47,12 @@ logger = logging.getLogger(__name__)
 FRAME_FRAC = 0.18          # fraction of each edge to strip as frame
 GRID = 4                   # spatial grid side (GRID × GRID cells)
 BINS = 16                  # colour histogram bins per channel per cell
-MATCH_THRESHOLD = 0.72     # cosine similarity below this → no match (return None)
+MATCH_THRESHOLD = 0.92     # cosine similarity below this → no match (return None)
+# NOTE: wiki sprites vs in-game screenshot crops have a significant domain gap
+# (JPEG compression, rendering differences).  Empirically, wrong matches can score
+# as high as 0.91 (e.g. Mime→Joker Stencil 0.908) while correct matches often fall
+# below 0.85.  A high threshold prevents false-confident misidentifications; the
+# OCR fallback (description panel text) handles cards that are hovered/described.
 # ─────────────────────────────────────────────────────────────────────────────
 
 _FEATURE_DIM = GRID * GRID * 3 * BINS   # 768
