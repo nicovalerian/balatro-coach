@@ -6,7 +6,6 @@ Runs both proj-airi models:
 """
 from __future__ import annotations
 
-import io
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -198,7 +197,3 @@ class BalatroDetector:
         entities = self._entities.detect(image, self.conf_threshold)
         ui = self._ui.detect(image, self.conf_threshold)
         return entities, ui
-
-
-def load_image(data: bytes) -> Image.Image:
-    return Image.open(io.BytesIO(data)).convert("RGB")

@@ -83,61 +83,8 @@ function SheetContent({
   );
 }
 
-function SheetHeader({
-  className,
-  ...props
-}) {
-  return (
-    <div
-      data-slot="sheet-header"
-      className={cn("flex flex-col gap-1.5 p-6", className)}
-      {...props} />
-  );
-}
-
-function SheetFooter({
-  className,
-  ...props
-}) {
-  return (
-    <div
-      data-slot="sheet-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-6", className)}
-      {...props} />
-  );
-}
-
-function SheetTitle({
-  className,
-  ...props
-}) {
-  return (
-    <SheetPrimitive.Title
-      data-slot="sheet-title"
-      className={cn("font-heading text-sm font-medium text-foreground", className)}
-      {...props} />
-  );
-}
-
-function SheetDescription({
-  className,
-  ...props
-}) {
-  return (
-    <SheetPrimitive.Description
-      data-slot="sheet-description"
-      className={cn("text-xs/relaxed text-muted-foreground", className)}
-      {...props} />
-  );
-}
-
 export {
   Sheet,
   SheetTrigger,
-  SheetClose,
   SheetContent,
-  SheetHeader,
-  SheetFooter,
-  SheetTitle,
-  SheetDescription,
 }

@@ -79,11 +79,3 @@ export function sendChatMessage(
 
   return ctrl;
 }
-
-export async function analyzeScreenshot(file) {
-  const body = new FormData();
-  body.append("file", file);
-  const res = await fetch(`${API_BASE}/api/analyze`, { method: "POST", body });
-  if (!res.ok) throw new Error(`Analyze error: ${res.status}`);
-  return res.json();
-}

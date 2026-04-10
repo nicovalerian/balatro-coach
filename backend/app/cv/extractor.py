@@ -43,7 +43,6 @@ def _get_joker_classifier() -> JokerClassifier:
     return _joker_clf
 
 CARD_RANKS = list("A23456789") + ["10", "J", "Q", "K"]
-CARD_SUITS = ["Spades", "Hearts", "Clubs", "Diamonds"]
 
 # Map OCR'd text → normalised suit
 SUIT_MAP = {

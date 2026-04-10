@@ -131,12 +131,6 @@ class JokerClassifier:
         self._vectors = data["vectors"].astype(np.float32)
         logger.info("Loaded joker index: %d entries from %s", len(self._names), self._index_path)
 
-    @property
-    def ready(self) -> bool:
-        if self._vectors is None:
-            self._load()
-        return len(self._names) > 0   # type: ignore[arg-type]
-
     def identify(self, crop: Image.Image) -> str | None:
         """
         Return the closest matching joker name, or None if below threshold.
