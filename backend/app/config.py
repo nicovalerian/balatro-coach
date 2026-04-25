@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     chroma_persist_dir: Path = ROOT / "data" / "chroma"
     embed_model: str = "all-MiniLM-L6-v2"
     retrieval_top_k: int = 10  # more chunks after paragraph-level re-index
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_candidates: int = 20  # candidates fetched before reranking
 
     # LLM
     max_output_tokens: int = 2048

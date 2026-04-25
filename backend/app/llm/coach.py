@@ -103,6 +103,57 @@ IMAGE_UNAVAILABLE_MESSAGE = (
 )
 
 
+def build_rag_query(
+    user_message: str,
+    game_state: dict | None,
+    additional_game_states: list[dict],
+) -> str:
+    """Build a coherent retrieval query from user message + game state context.
+
+    Sentences embed better than token soup: dense models capture semantic
+    meaning best when the query reads like natural language.
+    """
+    jokers: list[str] = []
+    shop_items: list[str] = []
+    context_parts: list[str] = []
+
+    for state in [game_state, *additional_game_states]:
+        if not state:
+            continue
+        jokers += [j.get("name", "") for j in state.get("jokers", [])]
+        shop_items += [i.get("name", "") for i in state.get("shop", {}).get("items", [])]
+        if state.get("ante") is not None:
+            context_parts.append(f"Ante {state['ante']}")
+        blind = state.get("blind", {}) or {}
+        if blind.get("name"):
+            context_parts.append(str(blind["name"]))
+        resources = state.get("resources", {}) or {}
+        for key in ("hands", "discards", "money"):
+            if resources.get(key) is not None:
+                context_parts.append(f"{key} {resources[key]}")
+
+    jokers = [j for j in jokers if j]
+    shop_items = [s for s in shop_items if s]
+
+    query_parts = [user_message]
+    if jokers:
+        query_parts.append(f"Active jokers: {', '.join(jokers[:5])}.")
+    if shop_items:
+        query_parts.append(f"Shop contains: {', '.join(shop_items[:3])}.")
+    if context_parts:
+        query_parts.append("; ".join(context_parts) + ".")
+
+    if parse_cards_from_text(user_message):
+        query_parts.append("Poker hand base chips mult scoring table.")
+
+    message_lower = user_message.lower()
+    mechanic_terms = ("rarity", "order", "position", "xmult", "mult", "synergy", "anti-synergy")
+    if any(term in message_lower for term in mechanic_terms):
+        query_parts.append("Joker rarity activation timing left to right order synergy.")
+
+    return " ".join(query_parts)
+
+
 class BalatroCoach:
     def __init__(self, retriever: RAGRetriever):
         base_url = settings.inference_base_url.rstrip("/") + "/"
@@ -296,31 +347,7 @@ class BalatroCoach:
         game_state: dict | None,
         additional_game_states: list[dict],
     ) -> str:
-        """Enrich retrieval query with joker names from game state."""
-        parts = [user_message]
-        if parse_cards_from_text(user_message):
-            parts.extend(["poker hands base chips mult table", "balatro hand scoring"])
-        for state in [game_state, *additional_game_states]:
-            if not state:
-                continue
-            jokers = [j.get("name", "") for j in state.get("jokers", [])]
-            parts.extend(jokers)
-            shop_items = [i.get("name", "") for i in state.get("shop", {}).get("items", [])]
-            parts.extend(shop_items)
-            if state.get("ante") is not None:
-                parts.append(f"ante {state['ante']}")
-            blind = state.get("blind", {}) or {}
-            if blind.get("name"):
-                parts.append(str(blind["name"]))
-            resources = state.get("resources", {}) or {}
-            for key in ("hands", "discards", "money"):
-                if resources.get(key) is not None:
-                    parts.append(f"{key} {resources[key]}")
-        message_lower = user_message.lower()
-        mechanic_terms = ("rarity", "order", "position", "xmult", "mult", "synergy", "anti-synergy")
-        if any(term in message_lower for term in mechanic_terms):
-            parts.extend(["joker rarity", "activation timing", "left to right order", "synergy"])
-        return " ".join(p for p in parts if p)
+        return build_rag_query(user_message, game_state, additional_game_states or [])
 
     def _build_model_candidates(self) -> list[str]:
         candidates: list[str] = [settings.model.strip()]
@@ -510,8 +537,7 @@ def _format_context(chunks: list[dict]) -> str:
         src = chunk["metadata"].get("source", "")
         name = chunk["metadata"].get("name", "")
         header = f"[{name or src}]"
-        # Trim to ~700 chars per chunk to stay within token budget
-        text = chunk["text"][:700].strip()
+        text = chunk["text"][:1200].strip()
         parts.append(f"{header}\n{text}")
     return "\n\n".join(parts)
 

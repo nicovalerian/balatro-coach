@@ -11,7 +11,7 @@ AI coaching for [Balatro](https://www.playbalatro.com/): upload a screenshot, ex
 | Frontend | React 18 + Vite |
 | Backend | FastAPI + uvicorn |
 | CV | YOLO11n ONNX + RapidOCR |
-| Retrieval | ChromaDB + BM25 (RRF merge) |
+| Retrieval | ChromaDB + BM25 (RRF merge) + cross-encoder reranker |
 | LLM | DigitalOcean Serverless Inference (`/v1/chat/completions`) |
 | CI/CD | GitHub Actions |
 | Hosting | Docker Compose locally, Render (example cloud deploy) |
@@ -86,6 +86,8 @@ See `.env.example`. Main settings:
 - `CHAT_HISTORY_MAX_TURNS` (default: `12`, per-session memory window)
 - `VISION_MODELS` (default: empty; comma-separated model IDs allowed to receive `image_url` payloads. Leave empty when relying on CV-only screenshot parsing)
 - `SYNERGY_MODEL` (default: `anthropic-claude-3.5-haiku`)
+- `RERANK_MODEL` (default: `cross-encoder/ms-marco-MiniLM-L-6-v2`; set empty to disable reranking)
+- `RERANKER_CANDIDATES` (default: `20`; candidates fetched before reranking)
 
 ---
 
@@ -100,6 +102,32 @@ See `.env.example`. Main settings:
 | Synergy corpus (LLM-generated) | Card-level chunks | `build_index.py --synergies` |
 
 Cached JSONL lives in `backend/data/` and can be rebuilt with `--force`.
+
+### Retrieval pipeline
+
+Retrieval uses a three-stage approach:
+
+1. **Adaptive fetch** — the card vs. guide collection split is weighted by query intent (joker-specific queries bias toward cards; strategy/economy queries bias toward guides).
+2. **Hybrid RRF** — dense embeddings (`all-MiniLM-L6-v2`) and BM25 are merged via Reciprocal Rank Fusion.
+3. **Cross-encoder rerank** — the top `RERANKER_CANDIDATES` (default 20) candidates are re-scored by `cross-encoder/ms-marco-MiniLM-L-6-v2` before the final top-K is returned. Set `RERANK_MODEL=` to disable.
+
+---
+
+## Testing
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest tests/ -v -s
+```
+
+The test suite measures retrieval quality on a 10-query golden dataset (Hit@K, MRR, Precision@K) and unit-tests RRF merge, ID uniqueness, adaptive split, query formulation, context truncation, rule correction, and hand evaluation.
+
+To run the reranker comparison tests (downloads ~86 MB cross-encoder model):
+
+```bash
+pytest tests/ -v -s --run-slow
+```
 
 ---
 
@@ -129,7 +157,11 @@ balatro-coach/
 │   ├── scripts/
 │   │   ├── download_models.py
 │   │   └── build_index.py
+│   ├── tests/
+│   │   ├── conftest.py
+│   │   └── test_rag_eval.py
 │   ├── requirements.txt
+│   ├── requirements-dev.txt
 │   └── Dockerfile
 ├── frontend/
 ├── .github/workflows/ci.yml

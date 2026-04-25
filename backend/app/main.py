@@ -324,6 +324,8 @@ def _get_retriever():
         _retriever = RAGRetriever(
             persist_dir=settings.chroma_persist_dir,
             embed_model=settings.embed_model,
+            rerank_model=settings.rerank_model or None,
+            reranker_candidates=settings.reranker_candidates,
         )
     return _retriever
 
