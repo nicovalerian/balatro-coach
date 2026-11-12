@@ -62,9 +62,10 @@ function reducer(state, action) {
     case "FINISH_MESSAGE":
       return {
         ...state,
-        messages: state.messages.map((message) =>
-          message.id === action.id ? { ...message, streaming: false } : message
-        ),
+        messages: state.messages
+          .map((message) => (message.id === action.id ? { ...message, streaming: false } : message))
+          // A reply that never produced text (e.g. the request failed) leaves no empty bubble behind.
+          .filter((message) => message.id !== action.id || message.content.trim().length > 0),
         isLoading: false,
       };
 
@@ -172,7 +173,7 @@ export function useChat() {
           dispatch({
             type: "ADD_SYSTEM_MESSAGE",
             id: uid(),
-            content: `Error: ${error.message}. Please try again.`,
+            content: `Error: ${error.message}.`,
           });
           dispatch({ type: "FINISH_MESSAGE", id: assistantMessageId });
         },
