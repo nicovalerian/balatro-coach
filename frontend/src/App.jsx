@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { AnimatePresence, LazyMotion, MotionConfig, domAnimation, m, useReducedMotion } from "motion/react";
 import {
   ChevronDown,
   Club,
   Diamond,
   Heart,
+  ImagePlus,
   Menu,
+  MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
   RotateCcw,
   Send,
   Spade,
@@ -13,15 +18,26 @@ import {
 import { useChat } from "./hooks/useChat";
 import ChatMessage from "./components/ChatMessage";
 import GameStateCard from "./components/GameStateCard";
-import ImageUploader from "./components/ImageUploader";
+import ImageUploader, { addImageFiles, useClipboardImages } from "./components/ImageUploader";
+import ThemeToggle from "./components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  ChatContainerContent,
+  ChatContainerFollow,
+  ChatContainerRoot,
+  ScrollButton,
+} from "@/components/ui/chat-container";
+import { Disclosure, DisclosureContent } from "@/components/ui/disclosure";
+import { PromptInput, PromptInputActions, PromptInputTextarea } from "@/components/ui/prompt-input";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
+  SheetDescription,
+  SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { SPRING, dealIn } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 const QUICK_PROMPTS = [
@@ -29,21 +45,6 @@ const QUICK_PROMPTS = [
   "Analyze the highest score I can get here.",
   "What's the best buy in this shop?",
   "Can this line survive the next blind?",
-];
-
-const COACH_PRIORITIES = [
-  {
-    label: "Blind First",
-    detail: "Beat the next score check before chasing greedier scaling.",
-  },
-  {
-    label: "Economy Tempo",
-    detail: "Protect money and rerolls whenever the board gives you room.",
-  },
-  {
-    label: "Joker Order",
-    detail: "Left-to-right sequencing matters more than flashy rarity.",
-  },
 ];
 
 const STARTER_MESSAGES = [
@@ -85,76 +86,80 @@ const EMPTY_GAME_STATE = {
   },
 };
 
-function PromptButton({ prompt, onClick }) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      className="action-button action-button-ghost min-h-[38px] justify-start px-3 py-2 text-left"
-      onClick={() => onClick(prompt)}
-    >
-      <span className="terminal-copy text-[12px] leading-5 text-inherit">{prompt}</span>
-    </Button>
-  );
-}
+const SIDEBAR_WIDTH = 320;
+const SIDEBAR_GAP = 20;
 
-function SidebarPanel({ gameState, handSettings, updateHandSetting, mobile = false, onClose }) {
+function SidebarPanel({ gameState, handSettings, updateHandSetting, mobile = false }) {
+  const state = gameState ?? EMPTY_GAME_STATE;
+  const Title = mobile ? SheetTitle : "h2";
+  const Description = mobile ? SheetDescription : "p";
+
   return (
-    <div className="flex h-full flex-col p-4 sm:p-5">
-      <section className="terminal-panel flex min-h-0 flex-1 flex-col p-4 sm:p-5">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="px-5 pt-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="panel-label text-primary">Game State / Run Brief</p>
+          <Title className="panel-label text-gold">Game State</Title>
           <div className="flex items-center gap-2">
-            {(gameState ?? EMPTY_GAME_STATE)?.screen_type ? (
+            {state.screen_type ? (
               <span className="status-pill">
-                <span className="status-light" />
-                <span className="pixel-font text-[11px] text-white">
-                  {(gameState ?? EMPTY_GAME_STATE).screen_type}
-                </span>
+                <span className="status-light" aria-hidden="true" />
+                <span className="pixel-font text-[12px] text-ink">{state.screen_type}</span>
               </span>
             ) : null}
             {mobile ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="action-button action-button-ghost"
-                onClick={onClose}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              <SheetClose asChild>
+                <Button size="icon-sm" aria-label="Close game state panel">
+                  <X />
+                </Button>
+              </SheetClose>
             ) : null}
           </div>
         </div>
-        <p className="terminal-copy mt-3 text-[12px] leading-6 text-[#c7d0cb]">
+        <Description className="terminal-copy mt-3 text-[12px] leading-6 text-ink-muted">
           Quick reminders, synergy targets, and hand values update here as screenshots are analyzed.
-        </p>
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pb-2 pr-1">
-          <GameStateCard
-            state={gameState ?? EMPTY_GAME_STATE}
-            handSettings={handSettings}
-            updateHandSetting={updateHandSetting}
-          />
-        </div>
-      </section>
+        </Description>
+      </div>
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto border-t-2 border-white/[0.06] px-5 pb-5 pt-2">
+        <GameStateCard state={state} handSettings={handSettings} updateHandSetting={updateHandSetting} />
+      </div>
     </div>
   );
 }
 
-function EmptyChatState() {
+function SuitMark() {
   return (
-    <section className="space-y-3 pb-2">
-      {STARTER_MESSAGES.map((message, index) => (
-        <div
-          key={message.id}
-          className="message-enter"
-          style={{ animationDelay: `${index * 0.1 + 0.15}s` }}
-        >
-          <ChatMessage role={message.role} content={message.content} />
-        </div>
-      ))}
-    </section>
+    <div
+      className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-control border-2 border-line bg-black/40 sm:flex"
+      aria-hidden="true"
+    >
+      <div className="grid grid-cols-2 gap-1">
+        <Spade className="h-3.5 w-3.5 text-gold" />
+        <Heart className="h-3.5 w-3.5 text-suit-heart" />
+        <Club className="h-3.5 w-3.5 text-felt-glow" />
+        <Diamond className="h-3.5 w-3.5 text-sky" />
+      </div>
+    </div>
   );
+}
+
+function MessageList({ items, staggered = false }) {
+  const reduceMotion = useReducedMotion();
+
+  return items.map((message, index) => (
+    <m.div
+      key={message.id}
+      initial={reduceMotion ? false : dealIn.initial}
+      animate={dealIn.animate}
+      transition={{ ...SPRING, delay: staggered ? 0.12 + index * 0.08 : 0 }}
+    >
+      <ChatMessage
+        role={message.role}
+        content={message.content}
+        streaming={message.streaming}
+        imagePreviews={message.imagePreviews}
+      />
+    </m.div>
+  ));
 }
 
 export default function App() {
@@ -165,285 +170,250 @@ export default function App() {
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
-  const bottomRef = useRef(null);
   const textareaRef = useRef(null);
+  const reduceMotion = useReducedMotion();
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const handlePastedImages = useCallback((pasted) => {
+    setImageFiles((current) => addImageFiles(current, pasted) ?? current);
+    setAttachmentsOpen(true);
+  }, []);
+  useClipboardImages(handlePastedImages);
 
   const handlePrompt = (prompt) => {
     setInput(prompt);
     textareaRef.current?.focus();
   };
 
-  const handleSend = () => {
-    const text = input.trim();
-    if (!text && imageFiles.length === 0) return;
+  const canSend = !isLoading && (input.trim().length > 0 || imageFiles.length > 0);
 
-    sendMessage(
-      text || "(screenshots uploaded - please analyse my game state)",
-      imageFiles
-    );
+  const handleSend = () => {
+    if (!canSend) return;
+    const text = input.trim();
+
+    sendMessage(text || "(screenshots uploaded - please analyse my game state)", imageFiles);
     setInput("");
     setImageFiles([]);
-  };
-
-  const handleKeyDown = (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      handleSend();
-    }
+    setAttachmentsOpen(false);
   };
 
   const isEmpty = messages.length === 0;
-  const coachStatus = isLoading ? "Coach Thinking" : "Coach Online";
+  const userMessageCount = messages.filter((message) => message.role === "user").length;
 
   return (
-    <div className="relative h-[100dvh] overflow-hidden text-foreground">
-      <div className="pointer-events-none absolute inset-0 suit-pattern" />
-      <div className="pointer-events-none absolute inset-0 scanline-overlay" />
-      <div className="pointer-events-none absolute inset-0 vignette-overlay" />
+    <LazyMotion features={domAnimation} strict>
+      <MotionConfig reducedMotion="user" transition={SPRING}>
+        <div className="relative h-[100dvh] overflow-hidden text-ink">
+          <a
+            href="#composer-input"
+            className="action-button action-button-primary sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50"
+            onClick={(event) => {
+              event.preventDefault();
+              textareaRef.current?.focus();
+            }}
+          >
+            Skip to message box
+          </a>
+          <div className="vignette-overlay pointer-events-none absolute inset-0" />
 
-      <div className="relative flex h-full xl:gap-6 xl:p-5">
-        <aside
-          className={cn(
-            "hidden xl:block xl:h-full xl:shrink-0 xl:transition-all xl:duration-200",
-            sidebarVisible ? "xl:w-[320px]" : "xl:w-0 xl:overflow-hidden"
-          )}
-        >
-          {sidebarVisible ? (
-            <div className="terminal-shell app-enter h-full overflow-hidden">
-              <SidebarPanel
-                gameState={gameState}
-                handSettings={handSettings}
-                updateHandSetting={updateHandSetting}
-              />
-            </div>
-          ) : null}
-        </aside>
-
-        <main className="terminal-shell app-enter-delayed flex min-w-0 flex-1 flex-col overflow-hidden xl:h-full">
-          <header className="border-b border-white/10 bg-black/25 px-4 py-4 sm:px-6">
-            <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between gap-4 xl:max-w-none">
-              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-                  <SheetTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="action-button action-button-ghost xl:hidden"
-                    >
-                      <Menu className="h-4 w-4" />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent
-                    side="left"
-                    className="mobile-sheet w-[92vw] max-w-[360px] p-0"
-                    showCloseButton={false}
-                  >
+          <div className="relative flex h-full xl:p-5">
+            <AnimatePresence initial={false}>
+              {sidebarVisible ? (
+                <m.aside
+                  key="sidebar"
+                  id="game-state-sidebar"
+                  aria-label="Game state"
+                  className="hidden shrink-0 overflow-hidden xl:block"
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: SIDEBAR_WIDTH + SIDEBAR_GAP, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  transition={reduceMotion ? { duration: 0 } : SPRING}
+                >
+                  <div className="terminal-shell h-full overflow-hidden" style={{ width: SIDEBAR_WIDTH }}>
                     <SidebarPanel
                       gameState={gameState}
                       handSettings={handSettings}
                       updateHandSetting={updateHandSetting}
-                      mobile
-                      onClose={() => setSidebarOpen(false)}
                     />
-                  </SheetContent>
-                </Sheet>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="action-button action-button-ghost hidden min-h-[44px] px-4 xl:inline-flex"
-                  onClick={() => setSidebarVisible((value) => !value)}
-                >
-                  <Menu className="mr-2 h-4 w-4" />
-                  {sidebarVisible ? "Hide Sidebar" : "Show Sidebar"}
-                </Button>
-
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border-2 border-white/15 bg-[#0f1316]/85 shadow-[4px_4px_0_rgba(0,0,0,0.55)]">
-                  <div className="grid grid-cols-2 gap-1 text-primary">
-                    <Spade className="h-3.5 w-3.5" />
-                    <Heart className="h-3.5 w-3.5 text-[#e43f3f]" />
-                    <Club className="h-3.5 w-3.5 text-[#8af7c8]" />
-                    <Diamond className="h-3.5 w-3.5 text-[#3498db]" />
                   </div>
-                </div>
+                </m.aside>
+              ) : null}
+            </AnimatePresence>
 
-                <div className="min-w-0">
-                  <p className="pixel-font truncate text-[28px] text-primary sm:text-[32px]">
-                    Balatro Coach
-                  </p>
-                  <p className="terminal-copy mt-1 max-w-2xl text-[12px] text-[#d0d7d2]">
-                    Coaching for blind survival, shop choices, score math, and joker order.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <span className={cn("status-pill", isLoading && "status-live")}>
-                  <span className="status-light" />
-                  <span className="pixel-font text-[11px] text-white sm:text-[12px]">
-                    {coachStatus}
-                  </span>
-                </span>
-
-                {messages.length > 0 ? (
-                  <Button
-                    type="button"
-                    className="action-button action-button-danger hidden min-h-[44px] px-4 sm:inline-flex"
-                    onClick={clearChat}
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Clear Chat
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </header>
-
-          <div className="flex min-h-0 flex-1 flex-col">
-            <ScrollArea className="min-h-0 flex-1 px-3 py-3 sm:px-5 lg:px-8 lg:py-4">
-              <div className="mx-auto w-full max-w-[980px]">
-                {isEmpty ? (
-                  <EmptyChatState />
-                ) : (
-                  <div className="space-y-4 pb-4">
-                    {messages.map((message, index) => (
-                      <div
-                        key={message.id}
-                        className="message-enter"
-                        style={{ animationDelay: `${index * 0.04}s` }}
-                      >
-                        <ChatMessage
-                          role={message.role}
-                          content={message.content}
-                          streaming={message.streaming}
-                          imagePreviews={message.imagePreviews}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div ref={bottomRef} />
-              </div>
-            </ScrollArea>
-
-            <div className="border-t border-white/10 bg-gradient-to-t from-black/35 to-transparent px-3 pb-3 pt-2 sm:px-5 lg:px-8">
-              <div className="mx-auto max-w-[980px]">
-                <div className="composer-shell p-2">
-                  <div className="flex flex-col gap-2">
-                    <div className="question-shell p-2">
-                      <Textarea
-                        ref={textareaRef}
-                        value={input}
-                        onChange={(event) => setInput(event.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Ask for the best line, highest score, joker order, or shop decision..."
-                        rows={2}
-                        disabled={isLoading}
-                        className="terminal-textarea text-[14px] leading-6"
+            <m.main
+              className="terminal-shell flex min-w-0 flex-1 flex-col overflow-hidden rounded-none border-0 xl:rounded-shell xl:border-2"
+              initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <header className="flex items-center justify-between gap-3 border-b-2 border-white/[0.06] bg-black/20 px-3 py-3 sm:px-6 sm:py-4">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                  <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                    <SheetTrigger asChild>
+                      <Button size="icon" className="xl:hidden" aria-label="Open game state panel">
+                        <Menu />
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="mobile-sheet w-[92vw] max-w-[360px]">
+                      <SidebarPanel
+                        gameState={gameState}
+                        handSettings={handSettings}
+                        updateHandSetting={updateHandSetting}
+                        mobile
                       />
-                    </div>
+                    </SheetContent>
+                  </Sheet>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        className="dropdown-toggle"
-                        onClick={() => setAttachmentsOpen((value) => !value)}
-                        aria-expanded={attachmentsOpen}
-                      >
-                        <span className="flex items-center gap-2">
-                          <span className="pixel-font text-[12px] text-[#f2c237]">
-                            Screenshots
-                          </span>
-                          {imageFiles.length > 0 ? (
-                            <span className="dropdown-count">{imageFiles.length}</span>
-                          ) : null}
-                        </span>
-                        <ChevronDown
-                          className={cn(
-                            "h-4 w-4 transition-transform duration-200",
-                            attachmentsOpen && "rotate-180"
-                          )}
-                        />
-                      </button>
+                  <Button
+                    className="hidden xl:inline-flex"
+                    aria-controls="game-state-sidebar"
+                    aria-expanded={sidebarVisible}
+                    onClick={() => setSidebarVisible((value) => !value)}
+                  >
+                    {sidebarVisible ? <PanelLeftClose /> : <PanelLeftOpen />}
+                    {sidebarVisible ? "Hide Sidebar" : "Show Sidebar"}
+                  </Button>
 
-                      <button
-                        type="button"
-                        className="dropdown-toggle"
-                        onClick={() => setPromptsOpen((value) => !value)}
-                        aria-expanded={promptsOpen}
+                  <SuitMark />
+
+                  <div className="min-w-0">
+                    <h1 className="pixel-font truncate text-[24px] text-gold sm:text-[32px]">Balatro Coach</h1>
+                    <p className="terminal-copy mt-1.5 hidden max-w-2xl truncate text-[12px] text-ink-muted sm:block">
+                      Coaching for blind survival, shop choices, score math, and joker order.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                  <span className={cn("status-pill", isLoading && "status-live")} role="status">
+                    <span className="status-light" aria-hidden="true" />
+                    <span className="pixel-font sr-only text-[12px] text-ink sm:not-sr-only">
+                      {isLoading ? "Thinking" : "Ready"}
+                    </span>
+                  </span>
+
+                  <ThemeToggle />
+
+                  <AnimatePresence initial={false}>
+                    {messages.length > 0 ? (
+                      <m.div
+                        key="clear"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
                       >
-                        <span className="pixel-font text-[12px] text-[#d9e6f2]">
+                        <Button variant="danger" size="icon" className="sm:hidden" onClick={clearChat} aria-label="Clear chat">
+                          <RotateCcw />
+                        </Button>
+                        <Button variant="danger" className="hidden sm:inline-flex" onClick={clearChat}>
+                          <RotateCcw />
+                          Clear Chat
+                        </Button>
+                      </m.div>
+                    ) : null}
+                  </AnimatePresence>
+                </div>
+              </header>
+
+              <ChatContainerRoot key={isEmpty ? "intro" : "conversation"} className="flex-1">
+                <ChatContainerFollow signal={userMessageCount} />
+                <ChatContainerContent className="mx-auto max-w-[920px] gap-5 px-3 py-5 sm:px-6 lg:px-8">
+                  {isEmpty ? <MessageList items={STARTER_MESSAGES} staggered /> : <MessageList items={messages} />}
+                </ChatContainerContent>
+                <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+                  <ScrollButton className="pointer-events-auto" />
+                </div>
+              </ChatContainerRoot>
+
+              <div className="border-t-2 border-white/[0.06] bg-black/20 px-3 pb-3 pt-3 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-[920px]">
+                  <PromptInput
+                    value={input}
+                    onValueChange={setInput}
+                    onSubmit={handleSend}
+                    isLoading={isLoading}
+                    textareaRef={textareaRef}
+                    maxHeight={200}
+                  >
+                    <PromptInputTextarea
+                      id="composer-input"
+                      aria-label="Ask the coach"
+                      placeholder="Ask for the best line, highest score, joker order, or shop decision..."
+                    />
+
+                    <PromptInputActions className="justify-between px-1 pb-1 pt-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="is-toggle"
+                          aria-expanded={attachmentsOpen}
+                          aria-controls="composer-screenshots"
+                          onClick={() => setAttachmentsOpen((value) => !value)}
+                        >
+                          <ImagePlus className="text-gold" />
+                          <span className="hidden min-[400px]:inline">Screenshots</span>
+                          <span className="sr-only min-[400px]:hidden">Screenshots</span>
+                          {imageFiles.length > 0 ? <span className="button-count">{imageFiles.length}</span> : null}
+                          <ChevronDown
+                            className={cn("transition-transform duration-200 ease-out", attachmentsOpen && "rotate-180")}
+                            aria-hidden="true"
+                          />
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          className="is-toggle"
+                          aria-expanded={promptsOpen}
+                          aria-controls="composer-prompts"
+                          onClick={() => setPromptsOpen((value) => !value)}
+                        >
+                          <MessageSquareText className="text-sky" />
                           Quick Prompts
-                        </span>
-                        <ChevronDown
-                          className={cn(
-                            "h-4 w-4 transition-transform duration-200",
-                            promptsOpen && "rotate-180"
-                          )}
-                        />
-                      </button>
-
-                      <div className="flex-1" />
+                          <ChevronDown
+                            className={cn("transition-transform duration-200 ease-out", promptsOpen && "rotate-180")}
+                            aria-hidden="true"
+                          />
+                        </Button>
+                      </div>
 
                       <Button
-                        type="button"
-                        className={cn(
-                          "action-button action-button-primary min-h-[36px] min-w-[100px] px-4",
-                          isLoading && "btn-shimmer"
-                        )}
+                        variant="primary"
+                        size="sm"
                         onClick={handleSend}
-                        disabled={isLoading || (!input.trim() && imageFiles.length === 0)}
+                        disabled={!canSend}
+                        aria-label={isLoading ? "Sending" : "Send"}
                       >
-                        <Send className="mr-2 h-3.5 w-3.5" />
-                        {isLoading ? "Sending" : "Send"}
+                        <Send />
+                        <span className="hidden sm:inline">{isLoading ? "Sending" : "Send"}</span>
                       </Button>
-                    </div>
+                    </PromptInputActions>
 
-                    <div
-                      className={cn(
-                        "expandable-section",
-                        attachmentsOpen && "expandable-section-open"
-                      )}
-                    >
-                      <div className="expandable-inner pt-1">
-                        <ImageUploader
-                          files={imageFiles}
-                          onFilesChange={setImageFiles}
-                          disabled={isLoading}
-                        />
-                      </div>
-                    </div>
-
-                    <div
-                      className={cn(
-                        "expandable-section",
-                        promptsOpen && "expandable-section-open"
-                      )}
-                    >
-                      <div className="expandable-inner pt-1">
-                        <div className="flex flex-wrap gap-1.5">
-                          {QUICK_PROMPTS.map((prompt) => (
-                            <PromptButton
-                              key={prompt}
-                              prompt={prompt}
-                              onClick={handlePrompt}
-                            />
-                          ))}
+                    <Disclosure open={attachmentsOpen} id="composer-screenshots">
+                      <DisclosureContent>
+                        <div className="px-1 pb-1 pt-2">
+                          <ImageUploader files={imageFiles} onFilesChange={setImageFiles} disabled={isLoading} />
                         </div>
-                      </div>
-                    </div>
-                  </div>
+                      </DisclosureContent>
+                    </Disclosure>
+
+                    <Disclosure open={promptsOpen} id="composer-prompts">
+                      <DisclosureContent>
+                        <ul className="flex flex-wrap gap-2 px-1 pb-1 pt-2" aria-label="Quick prompts">
+                          {QUICK_PROMPTS.map((prompt) => (
+                            <li key={prompt}>
+                              <button type="button" className="prompt-chip terminal-copy" onClick={() => handlePrompt(prompt)}>
+                                {prompt}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </DisclosureContent>
+                    </Disclosure>
+                  </PromptInput>
                 </div>
               </div>
-            </div>
+            </m.main>
           </div>
-        </main>
-      </div>
-    </div>
+        </div>
+      </MotionConfig>
+    </LazyMotion>
   );
 }

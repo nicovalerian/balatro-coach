@@ -1,12 +1,8 @@
 import { useRef, useState } from "react";
-import { ChevronDown, HelpCircle } from "lucide-react";
+import { ChevronDown, CircleHelp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Disclosure, DisclosureContent, DisclosureTrigger } from "@/components/ui/disclosure";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 // ── Planet card scaling table (mirrors backend hand_eval.py) ─────────────────
@@ -37,6 +33,19 @@ function computeHandStats(name, level) {
   };
 }
 
+const EDITION_CLASS = {
+  foil: "bg-[#4a90d9]/20 text-[#9fd0f7]",
+  holographic: "bg-[#9b59b6]/20 text-[#dcb8fb]",
+  polychrome: "bg-[#e67e22]/20 text-[#ffbf70]",
+  negative: "bg-white/10 text-ink-muted",
+};
+
+const HAND_HELP = [
+  "Level — planet cards applied to this hand type. Each level boosts base chips × mult.",
+  "Times played — how many times you've played this hand this run. Jokers like Observatory, Constellation, and Wee Joker scale with this count.",
+  "Chips × mult shown are base values before card chips or joker effects.",
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function GameStateCard({ state, handSettings, updateHandSetting }) {
@@ -45,79 +54,56 @@ export default function GameStateCard({ state, handSettings, updateHandSetting }
   const sidebar = state.sidebar ?? {};
   const reminders = sidebar.reminders ?? [];
   const synergyTargets = sidebar.synergy_targets ?? [];
-  const [openSections, setOpenSections] = useState({
-    brief: false,
-    jokers: false,
-    hands: true,
-  });
+  const jokers = state.jokers ?? [];
+  const resources = state.resources ?? {};
 
-  const toggleSection = (key) => {
-    setOpenSections((current) => ({ ...current, [key]: !current[key] }));
-  };
+  const hasSummary =
+    state.ante != null ||
+    state.confidence != null ||
+    state.low_confidence ||
+    resources.hands != null ||
+    resources.discards != null ||
+    resources.money != null;
 
   return (
-    <div className="space-y-4">
-      <div className="terminal-inset px-4 py-4">
-        <div className="flex flex-wrap gap-2">
-          <InfoBadge tone="gold">{state.screen_type ?? "unknown"}</InfoBadge>
-          {state.ante != null ? <InfoBadge>Ante {state.ante}</InfoBadge> : null}
+    <div className="divide-y-2 divide-white/[0.06]">
+      {hasSummary ? (
+        <div className="flex flex-wrap gap-2 pb-4">
+          {state.ante != null ? <Stat label="Ante" value={state.ante} /> : null}
           {state.confidence != null ? (
-            <InfoBadge>{Math.round((state.confidence ?? 0) * 100)}% read</InfoBadge>
+            <Stat value={`${Math.round((state.confidence ?? 0) * 100)}%`} suffix="read" />
           ) : null}
-          {state.low_confidence ? <InfoBadge tone="red">Low confidence</InfoBadge> : null}
+          {state.low_confidence ? <Stat tone="red" label="Low confidence" /> : null}
+          {resources.hands != null ? <Stat label="Hands" value={resources.hands} /> : null}
+          {resources.discards != null ? <Stat label="Discards" value={resources.discards} /> : null}
+          {resources.money != null ? <Stat tone="gold" value={`$${resources.money}`} /> : null}
         </div>
+      ) : null}
 
-        {(state.resources?.hands != null ||
-          state.resources?.discards != null ||
-          state.resources?.money != null) ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {state.resources?.hands != null ? (
-              <InfoBadge>Hands {state.resources.hands}</InfoBadge>
-            ) : null}
-            {state.resources?.discards != null ? (
-              <InfoBadge>Discards {state.resources.discards}</InfoBadge>
-            ) : null}
-            {state.resources?.money != null ? (
-              <InfoBadge tone="gold">${state.resources.money}</InfoBadge>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <Section
-        title="Run Brief"
-        open={openSections.brief}
-        onToggle={() => toggleSection("brief")}
-      >
+      <Section title="Run Brief">
         <ul className="space-y-2">
           {reminders.map((item) => (
-            <li key={item} className="terminal-copy flex gap-2 text-[12px] leading-6 text-[#dce3de]">
-              <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#f2c237]" />
-              <span>{item}</span>
-            </li>
+            <Bullet key={item} className="text-ink-muted" pip="bg-gold">
+              {item}
+            </Bullet>
           ))}
         </ul>
       </Section>
 
-      <Section
-        title="Jokers To Watch"
-        open={openSections.jokers}
-        onToggle={() => toggleSection("jokers")}
-      >
-        {(state.jokers ?? []).length > 0 ? (
-          <ul className="mb-3 space-y-1">
-            {(state.jokers ?? []).map((joker, i) => (
-              <li key={i} className="terminal-copy flex items-center gap-2 text-[12px] leading-6">
-                <span className="mt-[1px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#f2c237]" />
-                <span className="text-[#edf2ef]">{joker.name ?? "Unknown Joker"}</span>
+      <Section title="Jokers To Watch">
+        {jokers.length > 0 ? (
+          <ul className="mb-4 space-y-1.5">
+            {jokers.map((joker, i) => (
+              <li key={`${joker.name}-${i}`} className="terminal-copy flex items-center gap-2 text-[12px] leading-6 text-ink">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-[1px] bg-gold" aria-hidden="true" />
+                <span className="min-w-0 truncate">{joker.name ?? "Unknown Joker"}</span>
                 {joker.edition && joker.edition !== "base" ? (
-                  <span className={[
-                    "pixel-font rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
-                    joker.edition === "foil"         ? "bg-[#4a90d9]/30 text-[#89c4f4]" : "",
-                    joker.edition === "holographic"  ? "bg-[#9b59b6]/30 text-[#d7aefb]" : "",
-                    joker.edition === "polychrome"   ? "bg-[#e67e22]/30 text-[#ffb347]" : "",
-                    joker.edition === "negative"     ? "bg-white/10 text-[#c8d4ce]"     : "",
-                  ].join(" ")}>
+                  <span
+                    className={cn(
+                      "pixel-font shrink-0 rounded-full px-2 py-1 text-[12px]",
+                      EDITION_CLASS[joker.edition] ?? EDITION_CLASS.negative
+                    )}
+                  >
                     {joker.edition}
                   </span>
                 ) : null}
@@ -128,27 +114,16 @@ export default function GameStateCard({ state, handSettings, updateHandSetting }
         {synergyTargets.length > 0 ? (
           <ul className="space-y-2">
             {synergyTargets.map((item) => (
-              <li key={item} className="terminal-copy flex gap-2 text-[12px] leading-6 text-[#d6e8ff]">
-                <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#3498db]" />
-                <span>{item}</span>
-              </li>
+              <Bullet key={item} className="text-[#d6e8ff]" pip="bg-sky">
+                {item}
+              </Bullet>
             ))}
           </ul>
         ) : null}
       </Section>
 
-      <Section
-        title="Hand Settings"
-        open={openSections.hands}
-        onToggle={() => toggleSection("hands")}
-        helpText={
-          "Level — planet cards applied to this hand type. Each level boosts base chips × mult.\n\n" +
-          "Times played — how many times you've played this hand this run. " +
-          "Jokers like Observatory, Constellation, and Wee Joker scale with this count.\n\n" +
-          "Chips × mult shown are base values before card chips or joker effects."
-        }
-      >
-        <div className="space-y-1.5">
+      <Section title="Hand Settings" defaultOpen help={HAND_HELP}>
+        <ul className="divide-y divide-white/[0.06]">
           {(handSettings ?? []).map((hand, index) => (
             <HandRow
               key={hand.name}
@@ -157,9 +132,50 @@ export default function GameStateCard({ state, handSettings, updateHandSetting }
               onTimesPlayedChange={(delta) => updateHandSetting?.(index, "times_played", delta)}
             />
           ))}
-        </div>
+        </ul>
       </Section>
     </div>
+  );
+}
+
+function Stat({ label, value, suffix, tone = "default" }) {
+  return (
+    <Badge tone={tone} className="terminal-copy gap-1.5">
+      {label ? <span className={value != null ? "text-ink-muted" : undefined}>{label}</span> : null}
+      {value != null ? <span className="font-semibold tabular-nums">{value}</span> : null}
+      {suffix ? <span className="text-ink-muted">{suffix}</span> : null}
+    </Badge>
+  );
+}
+
+function Bullet({ children, className, pip }) {
+  return (
+    <li className={cn("terminal-copy flex gap-2.5 text-[12px] leading-6", className)}>
+      <span className={cn("mt-[9px] h-1.5 w-1.5 shrink-0 rounded-[1px]", pip)} aria-hidden="true" />
+      <span>{children}</span>
+    </li>
+  );
+}
+
+function NumberField({ label, value, onChange, onCommit, className }) {
+  return (
+    <label className="flex items-center gap-2">
+      <span className="pixel-font text-[12px] text-ink-subtle" aria-hidden="true">
+        {label.short}
+      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onCommit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        aria-label={label.full}
+        className={cn("hand-input pixel-font text-[14px]", className)}
+      />
+    </label>
   );
 }
 
@@ -196,127 +212,75 @@ function HandRow({ hand, onLevelChange, onTimesPlayedChange }) {
     onTimesPlayedChange(next - hand.times_played);
   };
 
-  const handleKeyDown = (commit) => (e) => {
-    if (e.key === "Enter") { e.currentTarget.blur(); commit(); }
-  };
-
   return (
-    <div
-      className={cn(
-        "rounded-[12px] border px-3 py-2 transition-colors",
-        isLeveled
-          ? "border-white/18 bg-[#1a2e24]/60"
-          : "border-white/8 bg-black/18"
-      )}
-    >
-      {/* Top row: name + planet */}
-      <div className="mb-1.5 flex items-baseline gap-1.5">
-        <span className="terminal-copy text-[11px] font-semibold text-[#edf2ef]">{hand.name}</span>
-        <span className="pixel-font text-[9px] text-[#6a8070]">{planet}</span>
-      </div>
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 py-2.5">
+      <p className="flex min-w-0 items-baseline gap-2">
+        <span className="terminal-copy truncate text-[12px] font-semibold leading-5 text-ink">{hand.name}</span>
+        <span className="pixel-font shrink-0 text-[12px] text-ink-subtle">{planet}</span>
+      </p>
 
-      {/* Controls row */}
-      <div className="flex items-center gap-3">
-        {/* Level input */}
-        <div className="flex items-center gap-1">
-          <span className="pixel-font text-[9px] text-[#6a8070]">lvl</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={levelStr}
-            onChange={(e) => setLevelStr(e.target.value)}
-            onBlur={commitLevel}
-            onKeyDown={handleKeyDown(commitLevel)}
-            aria-label="Hand level"
-            className={cn(
-              "pixel-font w-9 rounded-full border-0 px-1.5 py-0.5 text-center text-[10px] outline-none",
-              isLeveled
-                ? "bg-white/90 text-[#1a2a2a] shadow-sm"
-                : "bg-white/12 text-[#c8d4ce]"
-            )}
-          />
-        </div>
-
-        {/* Times played input */}
-        <div className="flex items-center gap-1">
-          <span className="pixel-font text-[9px] text-[#6a8070]">played</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={playedStr}
-            onChange={(e) => setPlayedStr(e.target.value)}
-            onBlur={commitPlayed}
-            onKeyDown={handleKeyDown(commitPlayed)}
-            aria-label="Times played"
-            className="pixel-font w-9 rounded-full border-0 bg-[#2a3a30] px-1.5 py-0.5 text-center text-[10px] text-[#ff8f00] outline-none"
-          />
-          <span className="pixel-font text-[9px] text-[#6a8070]">×</span>
-        </div>
-      </div>
-
-      {/* Chips × Mult — own line so it never overflows at any sidebar width */}
-      <div className="mt-1.5 flex items-center gap-1">
-        <span className="pixel-font rounded-full bg-[#009dff] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
-          {stats.chips}
+      <p className="flex items-center gap-1.5" aria-label={`${stats.chips} chips times ${stats.mult} mult`}>
+        <span className="score-chip bg-chips">{stats.chips}</span>
+        <span className="pixel-font text-[12px] text-ink-subtle" aria-hidden="true">
+          ×
         </span>
-        <span className="pixel-font text-[9px] text-[#6a8070]">×</span>
-        <span className="pixel-font rounded-full bg-[#FE5F55] px-2 py-0.5 text-center text-[10px] font-semibold text-white shadow-sm">
-          {stats.mult}
-        </span>
+        <span className="score-chip bg-mult">{stats.mult}</span>
+      </p>
+
+      <div className="col-span-2 flex items-center gap-5">
+        <NumberField
+          label={{ short: "Lvl", full: `${hand.name} level` }}
+          value={levelStr}
+          onChange={setLevelStr}
+          onCommit={commitLevel}
+          className={isLeveled ? "border-gold/60 text-gold" : "text-ink-muted"}
+        />
+        <NumberField
+          label={{ short: "Played", full: `${hand.name} times played` }}
+          value={playedStr}
+          onChange={setPlayedStr}
+          onCommit={commitPlayed}
+          className="text-suit-diamond"
+        />
       </div>
-    </div>
+    </li>
   );
 }
 
-function Section({ title, open, onToggle, helpText, children }) {
+function Section({ title, defaultOpen = false, help, children }) {
   return (
-    <div className="terminal-inset px-4 py-4">
-      <div className="flex items-center gap-1.5">
-        <button type="button" className="dropdown-toggle flex-1" onClick={onToggle}>
-          <span className="panel-label">{title}</span>
-          <ChevronDown
-            className={cn("h-4 w-4 transition-transform duration-200", open && "rotate-180")}
-          />
-        </button>
-        {helpText ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex shrink-0 items-center justify-center rounded text-[#6a8070] transition-colors hover:text-[#c8d4ce]"
-                  aria-label="Help"
-                >
-                  <HelpCircle className="h-3.5 w-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="left" className="max-w-[220px] whitespace-pre-line text-[11px] leading-[1.5]">
-                {helpText}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+    <Disclosure open={defaultOpen} className="py-2">
+      <div className="-mx-2 flex items-center gap-1">
+        <DisclosureTrigger>
+          <button type="button" className="section-trigger">
+            <span className="panel-label">{title}</span>
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </DisclosureTrigger>
+        {help ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-ink-subtle transition-colors duration-200 ease-out hover:bg-white/5 hover:text-ink"
+                aria-label={`How ${title.toLowerCase()} work`}
+              >
+                <CircleHelp className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <ul className="terminal-copy space-y-2">
+                {help.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </PopoverContent>
+          </Popover>
         ) : null}
       </div>
-      <div className={cn("expandable-section mt-3 opacity-100", open && "expandable-section-open")}>
-        <div className="expandable-inner">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function InfoBadge({ children, tone = "default" }) {
-  return (
-    <Badge
-      variant="outline"
-      className={[
-        "rounded-full border px-2.5 py-1.5",
-        "terminal-copy text-[12px] text-[#eef2ef]",
-        tone === "gold" ? "border-[#f2c237]/60 bg-[#f2c237]/12 text-[#f7db83]" : "",
-        tone === "red" ? "border-[#e43f3f]/60 bg-[#e43f3f]/12 text-[#ffc9c9]" : "",
-        tone === "default" ? "border-white/12 bg-black/15" : "",
-      ].join(" ")}
-    >
-      {children}
-    </Badge>
+      <DisclosureContent>
+        <div className="pb-3 pt-2">{children}</div>
+      </DisclosureContent>
+    </Disclosure>
   );
 }

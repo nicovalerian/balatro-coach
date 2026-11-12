@@ -4,14 +4,11 @@ import "@fontsource-variable/jetbrains-mono";
 import App from "./App.jsx";
 import "./index.css";
 import { ThemeProvider } from "./components/theme-provider";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <ThemeProvider>
-      <TooltipProvider>
-        <App />
-      </TooltipProvider>
+      <App />
     </ThemeProvider>
   </StrictMode>
 );

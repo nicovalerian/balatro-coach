@@ -1,17 +1,46 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { ImagePlus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SPRING, dealIn } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 const MAX_FILES = 3;
 
-export default function ImageUploader({
-  files = [],
-  onFilesChange,
-  disabled,
-}) {
+// Appends image files to the current selection, capped at MAX_FILES.
+// Returns null when nothing would change.
+export function addImageFiles(files, incomingFiles) {
+  const nextFiles = Array.from(incomingFiles ?? []).filter((file) => file?.type?.startsWith("image/"));
+  if (nextFiles.length === 0) return null;
+
+  const remainingSlots = Math.max(0, MAX_FILES - files.length);
+  if (remainingSlots === 0) return null;
+
+  return [...files, ...nextFiles.slice(0, remainingSlots)];
+}
+
+// Window-level paste handler, so screenshots can be pasted whether or not the
+// uploader panel is open.
+export function useClipboardImages(onImages) {
+  useEffect(() => {
+    const onPaste = (event) => {
+      const pastedFiles = Array.from(event.clipboardData?.items ?? [])
+        .filter((entry) => entry.kind === "file" && entry.type.startsWith("image/"))
+        .map((entry) => entry.getAsFile())
+        .filter(Boolean);
+
+      if (pastedFiles.length > 0) onImages(pastedFiles);
+    };
+
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [onImages]);
+}
+
+export default function ImageUploader({ files = [], onFilesChange, disabled }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
+  const reduceMotion = useReducedMotion();
 
   const previews = useMemo(
     () =>
@@ -29,36 +58,10 @@ export default function ImageUploader({
     [previews]
   );
 
-  const appendFiles = useCallback(
-    (incomingFiles) => {
-      const nextFiles = Array.from(incomingFiles ?? []).filter(
-        (file) => file?.type?.startsWith("image/")
-      );
-      if (nextFiles.length === 0) return;
-
-      const remainingSlots = Math.max(0, MAX_FILES - files.length);
-      if (remainingSlots === 0) return;
-
-      onFilesChange([...files, ...nextFiles.slice(0, remainingSlots)]);
-    },
-    [files, onFilesChange]
-  );
-
-  useEffect(() => {
-    const onPaste = (event) => {
-      const pastedFiles = Array.from(event.clipboardData?.items ?? [])
-        .filter((entry) => entry.kind === "file" && entry.type.startsWith("image/"))
-        .map((entry) => entry.getAsFile())
-        .filter(Boolean);
-
-      if (pastedFiles.length > 0) {
-        appendFiles(pastedFiles);
-      }
-    };
-
-    window.addEventListener("paste", onPaste);
-    return () => window.removeEventListener("paste", onPaste);
-  }, [appendFiles]);
+  const appendFiles = (incomingFiles) => {
+    const next = addImageFiles(files, incomingFiles);
+    if (next) onFilesChange(next);
+  };
 
   const removeFileAt = (indexToRemove) => {
     onFilesChange(files.filter((_, index) => index !== indexToRemove));
@@ -76,7 +79,7 @@ export default function ImageUploader({
       className={cn(
         "upload-dropzone",
         dragging && "upload-dropzone-active",
-        files.length > 0 && "upload-dropzone-preview",
+        files.length > 0 && !dragging && "upload-dropzone-preview",
         disabled && "cursor-not-allowed opacity-60"
       )}
       onDragOver={(event) => {
@@ -100,72 +103,77 @@ export default function ImageUploader({
         accept="image/*"
         multiple
         className="hidden"
+        aria-label="Choose screenshots"
         onChange={(event) => appendFiles(event.target.files)}
         disabled={disabled}
       />
 
-      <div className="flex min-h-[64px] flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-[12px] border-2 border-[#3498db]/45 bg-[#3498db]/10">
-            <Upload className="h-5 w-5 text-[#78bfff]" />
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3">
+        <div className="flex min-w-[220px] flex-1 items-center gap-3">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control border-2 border-sky/40 bg-sky/10"
+            aria-hidden="true"
+          >
+            <Upload className="h-[18px] w-[18px] text-sky" />
           </div>
-          <div>
-            <p className="pixel-font text-[13px] text-[#f0f0f0]">Screenshots</p>
-            <p className="terminal-copy text-[12px] text-[#b6c0ba]">
+          <div className="min-w-0">
+            <p className="pixel-font text-[14px] text-ink">
+              Screenshots <span className="text-ink-subtle">{files.length}/{MAX_FILES}</span>
+            </p>
+            <p className="terminal-copy mt-1 text-[12px] leading-5 text-ink-muted">
               Add up to 3 images from blind, hand, shop, or joker layout.
+              {files.length === 0 ? (
+                <span className="hidden sm:inline"> Drop them here or paste from the clipboard.</span>
+              ) : null}
             </p>
           </div>
         </div>
 
         <Button
-          type="button"
-          className="action-button action-button-secondary min-h-[44px] px-4"
+          variant="secondary"
+          size="sm"
           onClick={openPicker}
           disabled={disabled || files.length >= MAX_FILES}
         >
-          <ImagePlus className="mr-2 h-4 w-4" />
+          <ImagePlus />
           {files.length > 0 ? "Add Screenshot" : "Choose Images"}
         </Button>
       </div>
 
-      {files.length === 0 ? (
-        <div className="px-4 pb-2">
-          <p className="terminal-copy text-[12px] text-[#aab5ae]">
-            Drop screenshots here or paste from the clipboard.
-          </p>
-        </div>
-      ) : (
-        <div className="px-3 pb-2">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {files.length > 0 ? (
+        <ul className="grid grid-cols-3 gap-2 px-3 pb-3">
+          <AnimatePresence initial={false}>
             {previews.map((preview, index) => (
-              <div key={`${preview.file.name}-${index}`} className="terminal-inset p-2">
-                <div className="relative">
-                  <img
-                    src={preview.url}
-                    alt={`screenshot preview ${index + 1}`}
-                    className="h-[116px] w-full rounded-[12px] object-cover"
-                  />
-                  <Button
-                    type="button"
-                    className="action-button action-button-danger absolute right-2 top-2 min-h-[34px] px-3"
-                    onClick={() => removeFileAt(index)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-2">
-                  <p className="terminal-copy truncate text-[12px] text-[#dce4df]">
-                    {preview.file.name}
-                  </p>
-                  <span className="pixel-font text-[11px] text-[#f2c237]">
-                    {index + 1}/{MAX_FILES}
-                  </span>
-                </div>
-              </div>
+              <m.li
+                key={`${preview.file.name}-${preview.file.lastModified}-${preview.file.size}`}
+                initial={reduceMotion ? false : dealIn.initial}
+                animate={dealIn.animate}
+                exit={reduceMotion ? undefined : dealIn.exit}
+                transition={SPRING}
+                className="relative min-w-0"
+              >
+                <img
+                  src={preview.url}
+                  alt={`Screenshot ${index + 1}: ${preview.file.name}`}
+                  className="aspect-video w-full rounded-control border-2 border-line object-cover"
+                />
+                <Button
+                  variant="danger"
+                  size="icon-sm"
+                  className="absolute right-1 top-1 h-7 min-h-7 w-7 rounded-[8px] [&_svg]:h-3.5 [&_svg]:w-3.5"
+                  onClick={() => removeFileAt(index)}
+                  aria-label={`Remove ${preview.file.name}`}
+                >
+                  <X />
+                </Button>
+                <p className="terminal-copy mt-1.5 truncate text-[12px] text-ink-muted" title={preview.file.name}>
+                  {preview.file.name}
+                </p>
+              </m.li>
             ))}
-          </div>
-        </div>
-      )}
+          </AnimatePresence>
+        </ul>
+      ) : null}
     </div>
   );
 }

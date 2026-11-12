@@ -3,11 +3,11 @@ import remarkGfm from "remark-gfm";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const SUIT_COLORS = {
-  "♥": "#e43f3f",
-  "♦": "#ff8f00",
-  "♣": "#4ade80",
-  "♠": "#8ac9ff",
+const SUIT_CLASS = {
+  "♥": "text-suit-heart",
+  "♦": "text-suit-diamond",
+  "♣": "text-suit-club",
+  "♠": "text-suit-spade",
 };
 
 function colorSuits(children) {
@@ -15,78 +15,95 @@ function colorSuits(children) {
   const parts = children.split(/(♥|♦|♣|♠)/);
   if (parts.length === 1) return children;
   return parts.map((part, i) =>
-    SUIT_COLORS[part]
-      ? <span key={i} style={{ color: SUIT_COLORS[part], fontWeight: 700 }}>{part}</span>
-      : part
+    SUIT_CLASS[part] ? (
+      <span key={i} className={cn("font-bold", SUIT_CLASS[part])}>
+        {part}
+      </span>
+    ) : (
+      part
+    )
   );
 }
 
 function applyToChildren(children) {
-  if (Array.isArray(children)) return children.map((c, i) =>
-    typeof c === "string" ? <span key={i}>{colorSuits(c)}</span> : c
-  );
+  if (Array.isArray(children))
+    return children.map((c, i) => (typeof c === "string" ? <span key={i}>{colorSuits(c)}</span> : c));
   return colorSuits(children);
 }
 
-export default function ChatMessage({
-  role,
-  content,
-  streaming,
-  imagePreviews = [],
-}) {
+const MARKDOWN_COMPONENTS = {
+  p: ({ children }) => <p className="mb-3">{applyToChildren(children)}</p>,
+  ul: ({ children }) => <ul className="mb-3 list-disc space-y-1.5 pl-5 marker:text-ink-subtle">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1.5 pl-5 marker:text-ink-subtle">{children}</ol>,
+  li: ({ children }) => <li>{applyToChildren(children)}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-gold">{applyToChildren(children)}</strong>,
+  em: ({ children }) => <em className="not-italic text-sky">{applyToChildren(children)}</em>,
+  a: ({ children, href }) => (
+    <a href={href} target="_blank" rel="noreferrer" className="text-sky underline underline-offset-4">
+      {children}
+    </a>
+  ),
+  code: ({ inline, children }) =>
+    inline ? (
+      <code className="rounded-md border border-line bg-black/25 px-1.5 py-0.5 text-[12px] text-gold">{children}</code>
+    ) : (
+      <pre className="mb-3 overflow-x-auto rounded-control border border-line bg-black/30 px-4 py-3 text-[12px] leading-6 text-ink">
+        <code>{children}</code>
+      </pre>
+    ),
+  h1: ({ children }) => <h1 className="pixel-font mb-3 mt-5 text-[20px] text-gold">{children}</h1>,
+  h2: ({ children }) => <h2 className="pixel-font mb-3 mt-5 text-[18px] text-suit-club">{children}</h2>,
+  h3: ({ children }) => <h3 className="pixel-font mb-2 mt-4 text-[16px] text-sky">{children}</h3>,
+  blockquote: ({ children }) => (
+    <blockquote className="mb-3 rounded-control bg-black/20 px-4 py-2 text-ink-muted">{children}</blockquote>
+  ),
+  table: ({ children }) => (
+    <div className="mb-3 overflow-x-auto">
+      <table className="w-full border-collapse text-[12px]">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="border-b-2 border-line-strong">{children}</thead>,
+  tbody: ({ children }) => <tbody>{children}</tbody>,
+  tr: ({ children }) => <tr className="border-b border-line last:border-0">{children}</tr>,
+  th: ({ children }) => <th className="px-3 py-2 text-left font-semibold text-gold">{children}</th>,
+  td: ({ children }) => <td className="px-3 py-2 text-ink-muted">{applyToChildren(children)}</td>,
+};
+
+const ROLE_META = {
+  user: { name: "You", bubble: "chat-bubble-user" },
+  system: { name: "Table Alert", bubble: "chat-bubble-system", label: "text-[#ffd6d6]" },
+  assistant: { name: "Joker Coach", bubble: "chat-bubble-assistant", label: "text-sky" },
+};
+
+export default function ChatMessage({ role, content, streaming, imagePreviews = [] }) {
   const isUser = role === "user";
   const isSystem = role === "system";
-
-  const meta = isUser
-    ? {
-        name: "You",
-        label: "Player",
-        bubbleClass: "chat-bubble-user",
-        labelClass: "text-[#1b170a]",
-      }
-    : isSystem
-      ? {
-          name: "Table Alert",
-          label: "Warning",
-          bubbleClass: "chat-bubble-system",
-          labelClass: "text-[#ffdede]",
-        }
-      : {
-          name: "Joker Coach",
-          label: streaming ? "Thinking" : "Coach",
-          bubbleClass: "chat-bubble-assistant",
-          labelClass: "text-[#d8ebff]",
-        };
-
+  const meta = ROLE_META[role] ?? ROLE_META.assistant;
   const showLoader = streaming && !content.trim();
 
   return (
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
-      <div className={cn("max-w-[92%] sm:max-w-[84%]", isUser && "items-end")}>
+      <div className={cn("min-w-0 max-w-[92%] sm:max-w-[80%]", isUser && "flex flex-col items-end")}>
         {!isUser ? (
-          <div className="mb-2 flex items-center gap-2">
-            <span className={cn("pixel-font text-[12px]", meta.labelClass)}>{meta.name}</span>
-            <span className="inline-flex min-h-[24px] items-center justify-center rounded-full border border-white/10 bg-black/20 px-2 py-1">
-              <span className={cn("pixel-font text-[10px]", meta.labelClass)}>{meta.label}</span>
-            </span>
-          </div>
-        ) : null}
+          <p className={cn("pixel-font mb-2 flex items-center gap-2 text-[13px]", meta.label)}>
+            {isSystem ? <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+            {meta.name}
+            {streaming && !showLoader ? <span className="text-ink-subtle">· Thinking</span> : null}
+          </p>
+        ) : (
+          <p className="sr-only">You said:</p>
+        )}
 
-        <div className={cn("chat-bubble", meta.bubbleClass)}>
+        <div className={cn("chat-bubble", meta.bubble)}>
           {imagePreviews.length > 0 ? (
-            <div
-              className={cn(
-                "mb-4 grid gap-3",
-                imagePreviews.length === 1 ? "grid-cols-1" : "grid-cols-2"
-              )}
-            >
+            <div className={cn("mb-3 grid gap-2", imagePreviews.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
               {imagePreviews.map((preview, index) => (
                 <img
                   key={`${preview}-${index}`}
                   src={preview}
-                  alt={`uploaded screenshot ${index + 1}`}
+                  alt={`Uploaded screenshot ${index + 1}`}
                   className={cn(
-                    "w-full object-contain",
+                    "max-h-[220px] w-full object-cover",
                     imagePreviews.length === 3 && index === 0 && "col-span-2"
                   )}
                 />
@@ -95,103 +112,29 @@ export default function ChatMessage({
           ) : null}
 
           {showLoader ? (
-            <div className="flex items-center gap-3 py-1">
-              <div className="thinking-dots" aria-hidden="true">
+            <div className="flex items-center gap-3 py-1" role="status">
+              <span className="thinking-dots" aria-hidden="true">
                 <span className="thinking-dot" />
                 <span className="thinking-dot" />
                 <span className="thinking-dot" />
-              </div>
-              <p className="pixel-font text-[12px] text-[#f2c237]">Reading The Table</p>
+              </span>
+              <span className="pixel-font text-[13px] text-gold">Reading the table</span>
             </div>
           ) : isUser ? (
-            <p className="terminal-copy whitespace-pre-wrap text-[13px] leading-6 text-inherit">
-              {content}
-            </p>
+            <p className="terminal-copy whitespace-pre-wrap text-[13px] leading-6 text-inherit">{content}</p>
           ) : (
             <div className="markdown-copy terminal-copy text-[13px] leading-6 text-inherit">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  p: ({ children }) => <p className="mb-3">{applyToChildren(children)}</p>,
-                  ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5">{children}</ul>,
-                  ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5">{children}</ol>,
-                  li: ({ children }) => <li>{applyToChildren(children)}</li>,
-                  strong: ({ children }) => (
-                    <strong className="font-semibold text-[#f2c237]">{applyToChildren(children)}</strong>
-                  ),
-                  em: ({ children }) => (
-                    <em className="not-italic text-[#8ac9ff]">{applyToChildren(children)}</em>
-                  ),
-                  a: ({ children, href }) => (
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[#8ac9ff] underline underline-offset-4"
-                    >
-                      {children}
-                    </a>
-                  ),
-                  code: ({ inline, children }) =>
-                    inline ? (
-                      <code className="rounded-[8px] border border-white/10 bg-black/25 px-2 py-1 text-[12px] text-[#f2c237]">
-                        {children}
-                      </code>
-                    ) : (
-                      <pre className="mb-3 overflow-x-auto rounded-[14px] border border-white/10 bg-black/30 px-4 py-3 text-[12px] leading-6 text-[#e3ece7]">
-                        <code>{children}</code>
-                      </pre>
-                    ),
-                  h1: ({ children }) => (
-                    <h1 className="pixel-font mt-5 mb-3 text-[18px] text-[#f2c237]">{children}</h1>
-                  ),
-                  h2: ({ children }) => (
-                    <h2 className="pixel-font mt-4 mb-3 text-[16px] text-[#4ade80]">{children}</h2>
-                  ),
-                  h3: ({ children }) => (
-                    <h3 className="pixel-font mt-3 mb-2 text-[14px] text-[#8ac9ff]">{children}</h3>
-                  ),
-                  blockquote: ({ children }) => (
-                    <blockquote className="mb-3 border-l-2 border-[#3498db] pl-4 text-[#dceeff]">
-                      {children}
-                    </blockquote>
-                  ),
-                  table: ({ children }) => (
-                    <div className="mb-3 overflow-x-auto">
-                      <table className="w-full border-collapse text-[12px]">{children}</table>
-                    </div>
-                  ),
-                  thead: ({ children }) => (
-                    <thead className="border-b border-white/20">{children}</thead>
-                  ),
-                  tbody: ({ children }) => <tbody>{children}</tbody>,
-                  tr: ({ children }) => (
-                    <tr className="border-b border-white/8 last:border-0">{children}</tr>
-                  ),
-                  th: ({ children }) => (
-                    <th className="px-3 py-1.5 text-left font-semibold text-[#f2c237]">{children}</th>
-                  ),
-                  td: ({ children }) => (
-                    <td className="px-3 py-1.5 text-[#dce3de]">{applyToChildren(children)}</td>
-                  ),
-                }}
-              >
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
                 {content}
               </ReactMarkdown>
-
-              {streaming ? (
-                <span className="streaming-cursor" aria-hidden="true" />
-              ) : null}
+              {streaming ? <span className="streaming-cursor" aria-hidden="true" /> : null}
             </div>
           )}
 
           {isSystem ? (
-            <div className="mt-3 flex items-center gap-2 text-[#ffdede]">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="terminal-copy text-[12px]">
-                Something interrupted the request. Retrying is safe.
-              </span>
-            </div>
+            <p className="terminal-copy mt-3 border-t border-white/10 pt-3 text-[12px] text-[#ffd6d6]">
+              Something interrupted the request. Retrying is safe.
+            </p>
           ) : null}
         </div>
       </div>
