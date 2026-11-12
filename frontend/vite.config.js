@@ -9,6 +9,17 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the heavy, rarely-changing libraries out of the app chunk.
+        manualChunks: {
+          markdown: ["react-markdown", "remark-gfm"],
+          motion: ["motion"],
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       "/api": {
