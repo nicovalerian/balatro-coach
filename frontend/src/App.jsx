@@ -19,7 +19,6 @@ import { useChat } from "./hooks/useChat";
 import ChatMessage from "./components/ChatMessage";
 import GameStateCard from "./components/GameStateCard";
 import ImageUploader, { addImageFiles, useClipboardImages } from "./components/ImageUploader";
-import ThemeToggle from "./components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   ChatContainerContent,
@@ -289,8 +288,6 @@ export default function App() {
                       {isLoading ? "Thinking" : "Ready"}
                     </span>
                   </span>
-
-                  <ThemeToggle />
 
                   <AnimatePresence initial={false}>
                     {messages.length > 0 ? (
