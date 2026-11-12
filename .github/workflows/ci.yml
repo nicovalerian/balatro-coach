@@ -16,15 +16,15 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install deps
-        run: pip install -r requirements.txt ruff pytest httpx
+        run: pip install -r requirements.txt ruff==0.17.4 pytest httpx
 
       - name: Lint (ruff)
         run: ruff check app/
@@ -35,7 +35,7 @@ jobs:
         run: pytest tests/ -v --tb=short || true  # non-blocking until tests added
 
       - name: Docker build check
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: backend
           push: false
@@ -49,11 +49,11 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
